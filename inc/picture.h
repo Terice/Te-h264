@@ -38,12 +38,14 @@ public:
 
     // 宏块
     array2d<macroblock*> *mb;
-    // 预测值
-    array2d<pix16> *pred;
+    // -- 预测值和残差存储在宏块内
+    
+    // 预测值 
+    // array2d<pix16> *pred;
     // 残差值
-    array2d<int16> *resi;
+    // array2d<int16> *resi;
     // 重建图像值
-    array2d<pix8>  *cons;
+    array2d<byte>  *cons;
     // 获得一个宏块，并且把他放到正确的位置
     // 同时告诉这个宏块周围的可用情况
     void takein(macroblock* m);
@@ -52,10 +54,16 @@ public:
     // 根据 nal_ref_idc 来完成相应的动作
     void refidc(int nal_ref_idc);
 
-    void neighbour_4x4block(macroblock *current, int index_current, char direction, macroblock **target, int *index_target, int *x = NULL, int *y = NULL);
+    // 因为只有picture才能完成相邻宏块之间的交流
+    // 所以这些函数需要放在这里
+
+    // 得到4x4块的周围情况
+    void        neighbour_4x4block(macroblock *current, int index_current, char direction, macroblock **target, int *index_target, int *x = NULL, int *y = NULL);
+    // 得到相邻宏块的情况
     macroblock* neighbour_macroblock(macroblock* cur, char direction);
-    void neighbour_motionvector(macroblock *current, uint8 mbPartIdx, uint8 subPartIdx, uint8 direction, MotionVector **mv_lx);
-    void neighbour_part();
+    // 根据周围的运动矢量来预测当前part(subpart)的情况
+    void        neighbour_motionvector(macroblock *current, uint8 mbPartIdx, uint8 subPartIdx, uint8 direction, MotionVector **mv_lx);
+    void        neighbour_part();
 
     // 指明当前图像是不是IDR图像
     bool IdrPicFlag;

@@ -13,19 +13,19 @@ picture::picture(parser* p, decoder* d)
     this->pa = p;
     this->de = d;
     this->IdrPicFlag = false;
-    sl = NULL;
+    
     // 如果开始解picture了，那么说明sps和pps一定都出现过了，
     // 所以这里可以使用这些参数
-    macroblock *n = NULL;// 注意要初始化成NULL;
-    mb = new array2d<macroblock*>(pa->pV->PicWidthInMbs ,pa->pV->PicHeightInMbs, &n);
+    
+    mb = new array2d<macroblock*>(pa->pV->PicWidthInMbs ,pa->pV->PicHeightInMbs, NULL);
     size.w = pa->pV->PicWidthInMbs  * 16;
     size.h = pa->pV->PicHeightInMbs * 16;
 
-    pix16 zero = 0;
-    int16 zero_i = 0;
-    pred = new array2d<pix16>(size.w, size.h, &zero);
-    resi = new array2d<int16>(size.w, size.h, &zero_i);
-    cons = new array2d <pix8>(size.w, size.h);
+    // pix16 zero = 0;
+    // int16 zero_i = 0;
+    // pred = new array2d<pix16>(size.w, size.h, 0);
+    // resi = new array2d<int16>(size.w, size.h, 0);
+    cons = new array2d <byte>(size.w, size.h);
 }
 picture::~picture()
 {
@@ -34,8 +34,8 @@ picture::~picture()
     // 删除slice
     delete sl;
 
-    delete pred;
-    delete resi;
+    // delete pred;
+    // delete resi;
     delete cons;
     
 }
@@ -62,7 +62,7 @@ void detect(macroblock *current, MacroBlockNeighInfo *info, int x, int y, int dx
         info->pointer = NULL;
         return ;
     }
-    macroblock* target = *(pic->mb->get(pos_x, pos_y));
+    macroblock* target = (pic->mb->get(pos_x, pos_y));
     if(!target) 
     {
         info->avaiable = false;

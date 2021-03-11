@@ -15,11 +15,6 @@ typedef unsigned long  uint64;
 
 typedef unsigned char  byte;
 
-// pix16 是给计算过程用的，保证超过255时不会溢出
-typedef unsigned short pix16;
-// pix8 是给最终的结果用的
-typedef unsigned char  pix8;
-
 typedef struct point__
 {
     int x;

@@ -3,6 +3,10 @@
 #include "pixmap.h"
 #include "matrix.h"
 #include "parser.h"
+#include <string.h>
+
+// 尽量都采用matrix进行运算
+
 #define GET_NEIGHT_4x4_A() \
 pic->neighbour_4x4block(current, current->intra->predinfo.intra4x4->index, \
           'A',\
@@ -107,23 +111,23 @@ void Prediction_Intra4x4_V                   (macroblock* current)
     int predIndex = 0;
 
     // 将要读取的数值， 注意数据对齐
-    pix8     A = 0,     B = 0,     C = 0,     D = 0;
+    uint8     A = 0,     B = 0,     C = 0,     D = 0;
     int     r_B = 0,     c_B = 0;
     macroblock *mbAddrB;
     picture* pic = current->pic;
 
     get_neighbour_4x4_B();
     
-    pix16 re[4] = {
-        (pix16)A,(pix16)B,(pix16)C,(pix16)D
+    int re[4] = {
+        (int)A,(int)B,(int)C,(int)D
     };
 
     // 按列修改为按行复制
 
-    current->pred->setl(re, 0, 4);
-    current->pred->setl(re, 1, 4);
-    current->pred->setl(re, 2, 4);
-    current->pred->setl(re, 3, 4);
+    // current->pred->setl(re, 0, 4);
+    // current->pred->setl(re, 1, 4);
+    // current->pred->setl(re, 2, 4);
+    // current->pred->setl(re, 3, 4);
 
     // current->pred->setc(re + 0, 0);
     // current->pred->setc(re + 1, 1);
@@ -145,7 +149,7 @@ void Prediction_Intra4x4_H                   (macroblock* current)
     int predIndex = 0;
 
     // 将要读取的数值， 注意数据对齐
-    pix8     I = 0,     J = 0,     K = 0,     L = 0;
+    uint8     I = 0,     J = 0,     K = 0,     L = 0;
     int     r_A = 0,     c_A = 0;
     
     picture* pic = current->pic;
@@ -153,16 +157,16 @@ void Prediction_Intra4x4_H                   (macroblock* current)
 
     get_neighbour_4x4_A();
     
-    pix16 re[4] = {
-        (pix16)I, 
-        (pix16)J, 
-        (pix16)K, 
-        (pix16)L
+    int re[4] = {
+        (int)I, 
+        (int)J, 
+        (int)K, 
+        (int)L
     };
-    current->pred->setr(re + 0, 0);
-    current->pred->setr(re + 1, 1);
-    current->pred->setr(re + 2, 2);
-    current->pred->setr(re + 3, 3);
+    // current->pred->setr(re + 0, 0);
+    // current->pred->setr(re + 1, 1);
+    // current->pred->setr(re + 2, 2);
+    // current->pred->setr(re + 3, 3);
 }
 
 /*   
@@ -179,9 +183,9 @@ void Prediction_Intra4x4_DC                  (macroblock* current, parser *pa)
 {    
 
     int predIndex = 0;
-    pix8     A = 0,     B = 0,     C = 0,     D = 0;
+    uint8     A = 0,     B = 0,     C = 0,     D = 0;
     int     r_B = 0,     c_B = 0;
-    pix8     I = 0,     J = 0,     K = 0,     L = 0;
+    uint8     I = 0,     J = 0,     K = 0,     L = 0;
     int     r_A = 0,     c_A = 0;
     picture* pic = current->pic;
     macroblock *mbAddrA;
@@ -190,16 +194,17 @@ void Prediction_Intra4x4_DC                  (macroblock* current, parser *pa)
     get_neighbour_4x4_A();
     get_neighbour_4x4_B();
     
-    pix16 value = 0;
+    int value = 0;
     if(!mbAddrB && !mbAddrA)
-        value = (pix16)(((A + B + C + D + I + J + K + L + 4)) >> 3);
+        value = (int)(((A + B + C + D + I + J + K + L + 4)) >> 3);
     else if(!mbAddrB && mbAddrA)
-        value = (pix16)(((I + J + K + L + 2)) >> 2);
+        value = (int)(((I + J + K + L + 2)) >> 2);
     else if(mbAddrB && !mbAddrA)
-        value = (pix16)(((A + B + C + D + 2)) >> 2);
+        value = (int)(((A + B + C + D + 2)) >> 2);
     else 
-        value = (pix16)(1 << (pa->pV->BitDepthY - 1));
-    current->pred->seta(&value);
+        value = (int)(1 << (pa->pV->BitDepthY - 1));
+
+    current->pred[0] = value;
 }
 /*   
     for the Intra_4x4
@@ -214,10 +219,11 @@ void Prediction_Intra4x4_DC                  (macroblock* current, parser *pa)
 void Prediction_Intra4x4_Diagonal_Down_Left  (macroblock* current)
 {    
     pixmap res;
+
     int predIndex = 0;
-    pix8     A = 0,     B = 0,     C = 0,     D = 0;
+    uint8     A = 0,     B = 0,     C = 0,     D = 0;
     int     r_B = 0,     c_B = 0;
-    pix8     E = 0,     F = 0,     G = 0,     H = 0;
+    uint8     E = 0,     F = 0,     G = 0,     H = 0;
     int     r_C = 0,     c_C = 0;
     picture* pic = current->pic;
     macroblock *mbAddrC;
@@ -227,16 +233,17 @@ void Prediction_Intra4x4_Diagonal_Down_Left  (macroblock* current)
     get_neighbour_4x4_C();
     
     int pr[8] = {A, B, C, D, E, F, G, H};
-    pix16 p[7];
+    int p[7];
     for (int8 i = 0; i < 6; i++)
     {
-        p[i] = (pix16)thr_tap_filter(pr[i], pr[i + 1], pr[i + 2]);
+        p[i] = (int)thr_tap_filter(pr[i], pr[i + 1], pr[i + 2]);
     }
-    p[6] = (pix16)((pr[6] + 3 * pr[7]) >> 2);
-    res.setl(p + 0, 0, 4);
-    res.setl(p + 1, 1, 4);
-    res.setl(p + 2, 2, 4);
-    res.setl(p + 3, 3, 4);
+    p[6] = (int)((pr[6] + 3 * pr[7]) >> 2);
+
+    memcpy(current->pred[0][0], p + 0, 4 * sizeof(int));
+    memcpy(current->pred[0][1], p + 1, 4 * sizeof(int));
+    memcpy(current->pred[0][2], p + 2, 4 * sizeof(int));
+    memcpy(current->pred[0][3], p + 3, 4 * sizeof(int));
 }
 /*
     for the Intra_4x4
@@ -252,13 +259,13 @@ void Prediction_Intra4x4_Diagonal_Down_Right (macroblock* current)
 {
     pixmap res;
     int predIndex = 0;
-    pix8     A = 0,     B = 0,     C = 0,     D = 0;
+    uint8     A = 0,     B = 0,     C = 0,     D = 0;
     int     r_B = 0,     c_B = 0;
-    pix8     E = 0,     F = 0,     G = 0,     H = 0;
+    uint8     E = 0,     F = 0,     G = 0,     H = 0;
     int     r_C = 0,     c_C = 0;
-    pix8     I = 0,     J = 0,     K = 0,     L = 0;
+    uint8     I = 0,     J = 0,     K = 0,     L = 0;
     int     r_A = 0,     c_A = 0;   
-    pix8     M = 0;
+    uint8     M = 0;
     int     r_D = 0,     c_D = 0; 
     picture* pic = current->pic;
     macroblock *mbAddrA;
@@ -268,30 +275,32 @@ void Prediction_Intra4x4_Diagonal_Down_Right (macroblock* current)
     get_neighbour_4x4_B();
     get_neighbour_4x4_D();
 
-    pix16 value;
+
+
     int pr[9] = {L, K, J, I, M, A, B, C, D};
-    pix16 p[7];
+    int p[7];
     for (int8 i = 0; i < 7; i++)
     {
-        p[i] = (pix16)(pr[i] + 2 * pr[i + 1] + pr[i + 2] + 2 ) >> 2;
+        p[i] = (int)(pr[i] + 2 * pr[i + 1] + pr[i + 2] + 2 ) >> 2;
     }
-    res.setl(p + 0, 0, 4);
-    res.setl(p + 1, 1, 4);
-    res.setl(p + 2, 2, 4);
-    res.setl(p + 3, 3, 4);
+    
+    memcpy(current->pred[0][0], p + 0, 4 * sizeof(int));
+    memcpy(current->pred[0][1], p + 1, 4 * sizeof(int));
+    memcpy(current->pred[0][2], p + 2, 4 * sizeof(int));
+    memcpy(current->pred[0][3], p + 3, 4 * sizeof(int));
  
 }
 void Prediction_Intra4x4_V_Right             (macroblock* current)
 {    
     pixmap res;
     int predIndex = 0;
-    pix8     A = 0,     B = 0,     C = 0,     D = 0;
+    uint8     A = 0,     B = 0,     C = 0,     D = 0;
     int     r_B = 0,     c_B = 0;
-    pix8     E = 0,     F = 0,     G = 0,     H = 0;
+    uint8     E = 0,     F = 0,     G = 0,     H = 0;
     int     r_C = 0,     c_C = 0;
-    pix8     I = 0,     J = 0,     K = 0,     L = 0;
+    uint8     I = 0,     J = 0,     K = 0,     L = 0;
     int     r_A = 0,     c_A = 0;   
-    pix8     M = 0;
+    uint8     M = 0;
     int     r_D = 0,     c_D = 0; 
     picture* pic = current->pic;
     macroblock *mbAddrA;
@@ -302,49 +311,48 @@ void Prediction_Intra4x4_V_Right             (macroblock* current)
     get_neighbour_4x4_D();
 
     int pr[9] = {L, K, J, I, M, A, B, C, D};
-    pix16 p[4][4];
+    int p[4][4];
     int8 i;
     // p[0]
     for (i = 0; i < 4; i++)
     {
-        p[0][i] = (pix16)two_tap_filter(pr[i + 4], pr[i + 5]);
+        p[0][i] = (int)two_tap_filter(pr[i + 4], pr[i + 5]);
     }
     // p[1]
-    p[1][0] = (pix16)((pr[3] + 2 * pr[4] + pr[5] + 2) >> 2) ;
+    p[1][0] = (int)((pr[3] + 2 * pr[4] + pr[5] + 2) >> 2) ;
     for (i = 0; i < 3; i++)
     {
-        p[1][i + 1] = (pix16)thr_tap_filter(pr[i + 4], pr[i + 5], pr[i + 6]);
+        p[1][i + 1] = (int)thr_tap_filter(pr[i + 4], pr[i + 5], pr[i + 6]);
         
     }
     // p[2]
-    p[2][0] = (pix16)thr_tap_filter(pr[2], pr[3], pr[4]);
+    p[2][0] = (int)thr_tap_filter(pr[2], pr[3], pr[4]);
     for (i = 0; i < 3; i++)
     {
         p[2][i + 1] = p[0][i];
     }
     // p[3]
-    p[3][0] = (pix16)thr_tap_filter(pr[1], pr[2], pr[3]) ;
+    p[3][0] = (int)thr_tap_filter(pr[1], pr[2], pr[3]) ;
     p[3][1] = p[1][0];
     p[3][2] = p[1][1];
     p[3][3] = p[1][2];
 
-
-    res.setl(p[0], 0, 4);
-    res.setl(p[1], 1, 4);
-    res.setl(p[2], 2, 4);
-    res.setl(p[3], 3, 4);
+    memcpy(current->pred[0][0], p[0], 4 * sizeof(int));
+    memcpy(current->pred[0][1], p[1], 4 * sizeof(int));
+    memcpy(current->pred[0][2], p[2], 4 * sizeof(int));
+    memcpy(current->pred[0][3], p[3], 4 * sizeof(int));
 }
 void Prediction_Intra4x4_H_Down              (macroblock* current)
 {
     pixmap res;
     int predIndex = 0;
-    pix8     A = 0,     B = 0,     C = 0,     D = 0;
+    uint8     A = 0,     B = 0,     C = 0,     D = 0;
     int     r_B = 0,     c_B = 0;
-    pix8     E = 0,     F = 0,     G = 0,     H = 0;
+    uint8     E = 0,     F = 0,     G = 0,     H = 0;
     int     r_C = 0,     c_C = 0;
-    pix8     I = 0,     J = 0,     K = 0,     L = 0;
+    uint8     I = 0,     J = 0,     K = 0,     L = 0;
     int     r_A = 0,     c_A = 0;   
-    pix8     M = 0;
+    uint8     M = 0;
     int     r_D = 0,     c_D = 0; 
     picture* pic = current->pic;
     macroblock *mbAddrA;
@@ -355,42 +363,42 @@ void Prediction_Intra4x4_H_Down              (macroblock* current)
     get_neighbour_4x4_D();
 
     int pr[9] = {L, K, J, I, M, A, B, C, D};
-    pix16 p[4][4];
+    int p[4][4];
     int8 i;
     // 
-    p[0][0] = (pix16)two_tap_filter(pr[3], pr[4]);
+    p[0][0] = (int)two_tap_filter(pr[3], pr[4]);
     for (i = 0; i < 3; i++)
     {
-        p[0][i + 1] = (pix16)thr_tap_filter(pr[i + 3], pr[i + 4], pr[i + 5]);
+        p[0][i + 1] = (int)thr_tap_filter(pr[i + 3], pr[i + 4], pr[i + 5]);
     }
     
-    p[1][0] = (pix16)two_tap_filter(pr[2], pr[3]);
-    p[1][1] = (pix16)thr_tap_filter(pr[2], pr[3], pr[4]);
+    p[1][0] = (int)two_tap_filter(pr[2], pr[3]);
+    p[1][1] = (int)thr_tap_filter(pr[2], pr[3], pr[4]);
     p[1][2] = p[0][0];
     p[1][3] = p[0][1];
 
-    p[2][0] = (pix16)two_tap_filter(pr[1], pr[2]);
-    p[2][1] = (pix16)thr_tap_filter(pr[1], pr[2], pr[3]);
+    p[2][0] = (int)two_tap_filter(pr[1], pr[2]);
+    p[2][1] = (int)thr_tap_filter(pr[1], pr[2], pr[3]);
     p[2][2] = p[1][0];
     p[2][3] = p[1][1];
 
-    p[3][0] = (pix16)two_tap_filter(pr[0], pr[1]);
-    p[3][1] = (pix16)thr_tap_filter(pr[0], pr[1], pr[2]);
+    p[3][0] = (int)two_tap_filter(pr[0], pr[1]);
+    p[3][1] = (int)thr_tap_filter(pr[0], pr[1], pr[2]);
     p[3][2] = p[2][0];
     p[3][3] = p[2][1];
 
-    res.setl(p[0], 0, 4);
-    res.setl(p[1], 1, 4);
-    res.setl(p[2], 2, 4);
-    res.setl(p[3], 3, 4);
+    memcpy(current->pred[0][0], p[0], 4 * sizeof(int));
+    memcpy(current->pred[0][1], p[1], 4 * sizeof(int));
+    memcpy(current->pred[0][2], p[2], 4 * sizeof(int));
+    memcpy(current->pred[0][3], p[3], 4 * sizeof(int));
 }
 void Prediction_Intra4x4_V_Left              (macroblock* current)
 {
     pixmap res;
     int predIndex = 0;
-    pix8     A = 0,     B = 0,     C = 0,     D = 0;
+    uint8     A = 0,     B = 0,     C = 0,     D = 0;
     int     r_B = 0,     c_B = 0;
-    pix8     E = 0,     F = 0,     G = 0,     H = 0;
+    uint8     E = 0,     F = 0,     G = 0,     H = 0;
     int     r_C = 0,     c_C = 0;
     picture* pic = current->pic;
     macroblock *mbAddrB;
@@ -399,27 +407,26 @@ void Prediction_Intra4x4_V_Left              (macroblock* current)
     get_neighbour_4x4_C();
 
     int pr[8] = {A, B, C, D, E, F, G, H};
-    pix16 pe_02[5];
-    pix16 pe_13[5];
+    int pe_02[5];
+    int pe_13[5];
 
     int8 i;
     for (i = 0; i < 5; i++)
     {
-        pe_02[i] = (pix16)two_tap_filter(pr[i], pr[i + 1]);
-        pe_13[i] = (pix16)thr_tap_filter(pr[i], pr[i + 1], pr[i + 2]);
+        pe_02[i] = (int)two_tap_filter(pr[i], pr[i + 1]);
+        pe_13[i] = (int)thr_tap_filter(pr[i], pr[i + 1], pr[i + 2]);
     }
     
-    
-    res.setl(pe_02 + 0, 0, 4);
-    res.setl(pe_13 + 0, 1, 4);
-    res.setl(pe_02 + 1, 2, 4);
-    res.setl(pe_13 + 1, 3, 4);
+    memcpy(current->pred[0][0], pe_02 + 0, 4 * sizeof(int));
+    memcpy(current->pred[0][1], pe_13 + 0, 4 * sizeof(int));
+    memcpy(current->pred[0][2], pe_02 + 1, 4 * sizeof(int));
+    memcpy(current->pred[0][3], pe_13 + 1, 4 * sizeof(int));
 }
 void Prediction_Intra4x4_H_Up                (macroblock* current)
 {
     pixmap res;
     int predIndex = 0;
-    pix8     I = 0,     J = 0,     K = 0,     L = 0;
+    uint8     I = 0,     J = 0,     K = 0,     L = 0;
     int     r_A = 0,     c_A = 0;   
     picture* pic = current->pic;
     macroblock *mbAddrA;
@@ -429,15 +436,15 @@ void Prediction_Intra4x4_H_Up                (macroblock* current)
     int p[4][4];
     int8 i;
 
-    p[0][0] = (pix16)two_tap_filter(pr[2], pr[3]);
-    p[0][1] = (pix16)thr_tap_filter(pr[1], pr[2], pr[3]);
-    p[0][3] = (pix16)two_tap_filter(pr[1], pr[2]);
-    p[0][4] = (pix16)thr_tap_filter(pr[0], pr[1], pr[2]);
+    p[0][0] = (int)two_tap_filter(pr[2], pr[3]);
+    p[0][1] = (int)thr_tap_filter(pr[1], pr[2], pr[3]);
+    p[0][3] = (int)two_tap_filter(pr[1], pr[2]);
+    p[0][4] = (int)thr_tap_filter(pr[0], pr[1], pr[2]);
 
     p[1][0] = p[0][2];
     p[1][1] = p[0][3];
-    p[1][2] = (pix16)two_tap_filter(pr[0], pr[1]);
-    p[1][3] = (pix16)((3 * pr[0] + pr[1] + 2) >> 2);
+    p[1][2] = (int)two_tap_filter(pr[0], pr[1]);
+    p[1][3] = (int)((3 * pr[0] + pr[1] + 2) >> 2);
 
     p[2][0] = p[1][2];
     p[2][1] = p[1][3];
@@ -450,8 +457,8 @@ void Prediction_Intra4x4_H_Up                (macroblock* current)
     }
     
     
-    res.setl(p[0], 0, 4);
-    res.setl(p[1], 1, 4);
-    res.setl(p[2], 2, 4);
-    res.setl(p[3], 3, 4);
+    memcpy(current->pred[0][0], p[0], 4 * sizeof(int));
+    memcpy(current->pred[0][1], p[1], 4 * sizeof(int));
+    memcpy(current->pred[0][2], p[2], 4 * sizeof(int));
+    memcpy(current->pred[0][3], p[3], 4 * sizeof(int));
 }

@@ -4,22 +4,15 @@
 #include <iostream>
 int main(int argc, char* argv[])
 {
-    int a[16];
-    for (int i = 0; i < 16; i++)
-    {
-        a[i] = i;
-    }
-    matrix cur(4, 4, a);
-    
-    for (size_t i = 0; i < 1500000; i++)
-    {
-        matrix tmp(4,4, 10);
-        std::cout << tmp * cur << std::endl;
-        tmp = cur;
-        tmp = (tmp * cur);
-        cur = tmp;
-        // std::cout << i << std::endl;
-    }
+    int i =1, j =0, k =3;
+    int value = (--i || ++j && k++);
+    std::cout << value << std::endl;
+
+    // 5e(1+4);
+    int x = 0, y = 1;
+    int a = 0, b = 1;
+    ++x||++y;
+    std::cout << x << " " << y << std::endl;
     
 	return 0;
 }

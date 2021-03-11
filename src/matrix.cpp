@@ -3,6 +3,9 @@
 #include <ostream>
 #include "terror.h"
 #include "gvars.h"
+#include <stdlib.h>
+
+#define exiterr(str) {std::cout << str << std::endl;exit(-1);}   
 
 static unsigned long int datapkg_cout = 0;
 
@@ -157,7 +160,8 @@ void matrix::operator=(const matrix& r)
 }
 matrix matrix::operator+(const matrix& r)
 {
-    // if(this->w != r.w || this->h != r.h)      //抛出一个错误
+    if(this->w != r.w || this->h != r.h)      //抛出一个错误
+    exiterr(">> matrix: add size no compitiable");
 
     matrix result(r.w, r.h, 0);
 
@@ -172,6 +176,9 @@ matrix matrix::operator+(const matrix& r)
 }
 matrix matrix::operator*(const matrix& right)
 {
+    if(this->w != right.h || this->h != right.w)      //抛出一个错误
+    exiterr(">> matrix: nul size no compitiable");
+
     matrix result(right.w, this->h, 0);
 
     int r = result.h, c = result.w;

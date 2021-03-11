@@ -54,12 +54,12 @@ void macroblock::attach(picture* p)
     // 链接之后pic根据其位置引导这个宏块, 找到其周围的环境
     pic->takein(this);
     // 链接到pic里面的数据, 同时设置数据元的宽度，以及原图的格式化方式
-    pred = new pixmap(pic->pred->data, sizeof(pix16), pic->size);
-    resi = new pixmap(pic->resi->data, sizeof(int16), pic->size);
-    cons = new pixmap(pic->cons->data, sizeof(pix8) , pic->size);
+    pred = new matrix(16,16,0);
+    resi = new matrix(16,16,0);
+    cons = new pixmap(pic->cons->data, sizeof(byte) , pic->size);
     // 选择区域，这样就可以通过访问pixmap对象来修改picture中的数据了
-    pred->select(pos_sample_start, MACROBLOCK_SIZE);
-    resi->select(pos_sample_start, MACROBLOCK_SIZE);
+    // pred->select(pos_sample_start, MACROBLOCK_SIZE);
+    // resi->select(pos_sample_start, MACROBLOCK_SIZE);
     cons->select(pos_sample_start, MACROBLOCK_SIZE);
 
     // 这样宏块说他找到了
@@ -131,7 +131,7 @@ void macroblock::Parse_Sub(int* noSubMbPartSizeLessThan8x8Flag)
     uint8_t sub_type = 0;
     for(mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++)
     {
-        sub_type = pa->read_ae(51);
+        sub_type = pa->read_ae(0x00051000U);
 
         if(type >= 50 && type <= 74) sub_type += 10;//+= 10是在枚举类型中加上B块的偏移
 
@@ -262,9 +262,9 @@ void macroblock::Parse_Intra()
         uint8 *prev_intra4x4_pred_mode_flag = i->prev_intra4x4_pred_mode_flag;
         for(int8 luma4x4BlkIdx=0; luma4x4BlkIdx<16; luma4x4BlkIdx++) 
         { 
-            prev_intra4x4_pred_mode_flag[luma4x4BlkIdx] = pa->read_ae(31);
+            prev_intra4x4_pred_mode_flag[luma4x4BlkIdx] = pa->read_ae(0x00031000U);
             if(!prev_intra4x4_pred_mode_flag[luma4x4BlkIdx]) 
-                rem_intra4x4_pred_mode[luma4x4BlkIdx] = pa->read_ae(32);
+                rem_intra4x4_pred_mode[luma4x4BlkIdx] = pa->read_ae(0x00032000U);
         }
 
     }
@@ -433,7 +433,7 @@ void macroblock::ParseHead()
     }
 
 
-    type = (type_macroblock)pa->read_ae(21);
+    type = (type_macroblock)pa->read_ae(0x00021000U);
     // 为了要知道当前宏块的类型，需要在 ae 算子中加上偏移值来表明当前宏块的具体类型
     // ae 算子在计算这个句法的时候是能够知道具体的类型的，所以对其结果做了一定的修改
     // 因为解码出来的 mb_type 对于不同的slice都是从 0 开始的，而枚举值都是不同的
@@ -466,7 +466,7 @@ void macroblock::ParseHead()
     {
         // 读取 transform_size_8x8_flag 并且判断 I_NxN 的类型
         if(type == I_NxN && pa->pS->pps->transform_8x8_mode_flag)
-            transform_size_8x8_flag = pa->read_ae(22);
+            transform_size_8x8_flag = pa->read_ae(0x00022000U);
         else //transform_size_8x8_flag 默认是设置为 0 的
             transform_size_8x8_flag = 0;
         if(type == I_NxN) // I_NxN
@@ -483,7 +483,7 @@ void macroblock::ParseHead()
             Parse_Intra();
             // 除了要完成初始化之外，还要读取色度的预测模式
             if(pa->pV->ChromaArrayType == 1 || pa->pV->ChromaArrayType == 2) 
-                intra->intra_chroma_pred_mode = pa->read_ae(35);//ue|ae
+                intra->intra_chroma_pred_mode = pa->read_ae(0x00035000U);//ue|ae
         }
         else // 不是帧内
         {
@@ -507,7 +507,7 @@ void macroblock::ParseHead()
     // 读取色彩编码模式（不是预测模式）
     if(predmode != Intra_16x16)
     {
-        coded_block_pattern = pa->read_ae(23);
+        coded_block_pattern = pa->read_ae(0x00023000U);
         CodedBlockPatternLuma = coded_block_pattern % 16;
         CodedBlockPatternChroma = coded_block_pattern / 16;
         
@@ -517,7 +517,7 @@ void macroblock::ParseHead()
         noSubMbPartSizeLessThan8x8Flag &&\
         (type != B_Direct_16x16 || pa->pS->sps->direct_8x8_inference_flag))
         {
-            transform_size_8x8_flag = pa->read_ae(22);
+            transform_size_8x8_flag = pa->read_ae(0x00022000U);
         }
     }
     else        //帧内16x16的色彩系数编码模式由查表得到，
@@ -609,10 +609,10 @@ void macroblock::Decode_Inter()
             height = 8;
         }
         
-        int8 *ref_idx_l0 = inter->ref_idx_l0;
-        int8 *ref_idx_l1 = inter->ref_idx_l1;
-        bool *predFlagL0 = inter->predFlagL0;
-        bool *predFlagL1 = inter->predFlagL1;
+        int8     *ref_idx_l0 = inter->ref_idx_l0;
+        int8     *ref_idx_l1 = inter->ref_idx_l1;
+        bool     *predFlagL0 = inter->predFlagL0;
+        bool     *predFlagL1 = inter->predFlagL1;
         MotionVector **mv_l0 = inter->mv.mv_l0;
         MotionVector **mv_l1 = inter->mv.mv_l1;
 
@@ -762,6 +762,9 @@ void macroblock::Decode_Inter()
                     {
                         //到预测样点矩阵中，
                         // (*pred_Y)[yS + yL][xS + xL] += out[yL][xL];
+                        // 注意矩阵的运算，y 对应的才是 row
+                        pred[0][yS + yL][xS + xL] = out[yL][xL];
+                        
                     }
                 }
             }

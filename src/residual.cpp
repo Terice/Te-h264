@@ -11,6 +11,7 @@
 #include "matrix.h"
 #include "pixmap.h"
 #include <math.h>
+#include <string.h>
 
 residual::residual(macroblock *m, parser* p)
 {
@@ -347,7 +348,7 @@ void residual::Decode_Intra4x4()
     int qP = mb->qp.QPY_;
     // matrix residual_Y(16,16,0);
     matrix c(4,4,0);
-    pixmap *residual_Y = mb->resi;
+    matrix *resi = mb->resi;
     int16 sample_result;
     // point start = {.x = 0, .y = 0};
     // area  selec = {.w = 4, .h = 4};
@@ -374,8 +375,7 @@ void residual::Decode_Intra4x4()
             {
                 for (uint8_t col = 0; col < 4; col++)
                 {
-                    sample_result = (int16)c[row][col];
-                    residual_Y->set(col_cur,row_cur, &sample_result);
+                    resi[0][row_cur + row][col_cur + col] = c[row][col];
                 }
             }
         }
@@ -423,12 +423,11 @@ void residual::Decode_Intra16x16()
     matrix *tmp;;
     for (uint8_t i = 0; i < 16; i++)
     {
-        tmp = new matrix(4,4,0);
-        lumaResidual.set(i, &tmp) ; 
+        lumaResidual.set(i, new matrix(4,4,0)) ; 
     }    
     for (uint8_t i = 0; i < 16; i++)
     {
-        matrix* des = *lumaResidual.get(i);
+        matrix* des = lumaResidual.get(i);
         // cout << "des: " << des << endl;
         //write DC into residual
         (*des)[0][0] = dcY.get(i);
@@ -457,13 +456,13 @@ void residual::Decode_Intra16x16()
     {
         for (uint8_t j = 0; j < 16; j++)
         {
-            result[i][j] = (*(*(lumaResidual.get(i/4, j/4))))[i%4][j%4];
+            result[i][j] = (*lumaResidual.get(i/4, j/4))[i%4][j%4];
         }
     }
-    for (uint8_t i = 0; i < 16; i++){delete *lumaResidual.get(i);}
+    for (uint8_t i = 0; i < 16; i++){delete lumaResidual.get(i);}
 
     // result
-    mb->resi->from(&result);
+    mb->resi[0] = result;
 }
 void residual::Decode_Chroma(int iCbCr)
 {

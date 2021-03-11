@@ -5,6 +5,7 @@
 #include "parser.h"
 #include "pixmap.h"
 #include <string.h>
+#include "matrix.h"
 
 void Prediction_Intra16x16_V(macroblock *current, parser* pa)
 {
@@ -13,15 +14,17 @@ void Prediction_Intra16x16_V(macroblock *current, parser* pa)
 
     if(!current->neighbour.B.avaiable) return;
 
-    pix16 data[16] ;
-    pix8* res = (pix8*)(B->cons->get(15));
-    for (int8 i = 0; i < 16; i++)
-    {
+    int data[16] ;
+    // 得到 最后一行的数据指针
+    uint8* res = (uint8*)(B->cons->get(15));
+    for (int i = 0; i < 16; i++)
+    {// 格式转换
         data[i] = res[i];
     }
-    for (int8 i = 0; i < 16; i++)
+    // 复制
+    for (int i = 0; i < 16; i++)
     {
-        current->pred->setl(data, i, 16);
+        memcpy((*current->pred)[i], data, 16 * sizeof(int));
     }
     
 }
@@ -31,13 +34,12 @@ void Prediction_Intra16x16_H(macroblock *current, parser* pa)
     if(!current->neighbour.B.avaiable) return;
 
 
-    pix8 data;
-    pix16 temp;
+    uint8 data;
+    int temp;
     for (size_t r = 0; r < 16; r++)
     {
         A->cons->get(r, 15, &data);
-        temp = (pix16)data;
-        current->pred->setr(&temp, r);
+        temp = (int)data;
     }
 }
 void Prediction_Intra16x16_DC(macroblock *current, parser* pa)
@@ -45,7 +47,7 @@ void Prediction_Intra16x16_DC(macroblock *current, parser* pa)
     MacroBlockNeighInfo* A = &current->neighbour.A;
     MacroBlockNeighInfo* B = &current->neighbour.B;
     int sum_a = 0, sum_b = 0;
-    pix8 data;
+    uint8 data;
     if(A->avaiable)
     {
         for (size_t i = 0; i < 16; i++)
@@ -62,18 +64,18 @@ void Prediction_Intra16x16_DC(macroblock *current, parser* pa)
             sum_b += (int)data;
         }
     }
-    pix16 data_in;
+    int data_in;
     if( A->avaiable && B->avaiable)
-        data_in = (pix16)((sum_a + 8 + sum_b + 8 ) >> 5) ;
+        data_in = (int)((sum_a + 8 + sum_b + 8 ) >> 5) ;
     else if(A->avaiable) 
-        data_in = (pix16)((sum_a + 8) >> 4) ;
+        data_in = (int)((sum_a + 8) >> 4) ;
     else if(B->avaiable) 
-        data_in = (pix16)((sum_b + 8) >> 4) ;
+        data_in = (int)((sum_b + 8) >> 4) ;
     else 
-        data_in = (pix16)(1 << (pa->pV->BitDepthY - 1));
+        data_in = (int)(1 << (pa->pV->BitDepthY - 1));
     //
 
-    current->pred->seta(&data_in);
+    (*current->pred) = data_in;
 }
 void Prediction_Intra16x16_Plane(macroblock *current, parser* pa)
 {
@@ -83,7 +85,7 @@ void Prediction_Intra16x16_Plane(macroblock *current, parser* pa)
     MacroBlockNeighInfo* B = &current->neighbour.B;
     MacroBlockNeighInfo* D = &current->neighbour.D;
 
-    pix8 data_out;
+    uint8 data_out;
     if(D->avaiable) 
     {
         D->pointer->cons->get(15,15, &data_out);
@@ -115,13 +117,17 @@ void Prediction_Intra16x16_Plane(macroblock *current, parser* pa)
     int b = (5 * H + 32) >> 6;
     int c = (5 * V + 32) >> 6;
 
-    pix16 data_in;
+    int data_in[16][16];
     for (uint8 row = 0; row < 16; row++)
     {
         for (uint8 col = 0; col < 16; col++)
         {
-            data_in = (pix16)Clip1Y(((a + b * (col - 7) + c * (row - 7) + 16) >> 5),pa->pV->BitDepthY);
-            current->cons->set(col, row, &data_in);
+            data_in[row][col] = (int)Clip1Y(((a + b * (col - 7) + c * (row - 7) + 16) >> 5),pa->pV->BitDepthY);
         }
     }
+    for (int i = 0; i < 16; i++)
+    {
+        memcpy((*current->pred)[i], data_in, 16 * sizeof(int));
+    }
+    
 }

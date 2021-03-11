@@ -35,11 +35,14 @@ public:
     
     // 赋值等于会把一个局部变量变成固定的变量
     void operator=(const matrix&);
+    // 给一个矩阵赋值为一个int值
+    void operator=(int value);
     matrix operator+(int i);
     matrix operator+(const matrix&);
     // 相乘会返回一个新的 matrix，
     matrix operator*(const matrix&);
     matrix operator*(int i);
+    // 矩阵的重载符号是按照[row][col]来访问的
     int* operator[](int i) const;
 
 
@@ -61,7 +64,7 @@ public:
     // bool Set_c(int column, int value);
     // int Sum_c(int column);
 
-    int get(int i);
+    int  get(int i);
     bool set(int index, int i);
     bool set(int x, int y, int i);
 

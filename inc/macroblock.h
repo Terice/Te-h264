@@ -18,7 +18,8 @@ class macroblock;
 class matrix;
 
 
-
+// 运算预测值和残差值的时候都采用 matrix
+// 重建图像的值使用 pixmap 直接在 picture 的数据上做修改
 
 
 class macroblock
@@ -135,11 +136,17 @@ public:
     // 还需要三个个对像素级操作的数据对象
     // 对这三个对象进行操作时，一定要时刻想着数据元的长度
 
+    // 这里使用指针，第一个[] 表示当前操作的是哪个色彩组件
+    // 这样可以把符号重载的那个 * 少写一边，
+    // 虽然本来是没有做其他组件的打算，
+    // 但是这样写好像概念上更加能够说的过去吧
+    matrix *pred;
+    matrix *resi;
     // 预测值 单位 uin16
-    pixmap* pred;
+    // pixmap* pred;
     // 残差值 单位 int16
     // 残差由 residual 来计算
-    pixmap* resi; 
+    // pixmap* resi; 
     // 重建值 单位 uint8
     pixmap* cons;
 

@@ -409,7 +409,7 @@ void slice::ParseSliceData()
             }
             else
             {
-                ps->mb_skip_flag = pa->read_ae(11);
+                ps->mb_skip_flag = pa->read_ae(0x00011000U);
                 moreDataFlag = !ps->mb_skip_flag;
                 // 设置这个句法元素给宏块，让其自己判断解码方式
                 mb->mb_skip_flag = ps->mb_skip_flag;
@@ -421,7 +421,7 @@ void slice::ParseSliceData()
         {
             //意思是最后的宏块对中必须有一个宏块要被解码，要么都被跳过或者被帧解码，如果解码一个的话就要用场解码
             if(ps->MbaffFrameFlag && (CurrMbAddr % 2 == 0 || (CurrMbAddr % 2 == 1 && prevMbSkipped)))
-                ps->mb_field_decoding_flag = pa->read_ae(12);//1a
+                ps->mb_field_decoding_flag = pa->read_ae(0x00012000U);//1a
             else ps->mb_field_decoding_flag = ps->field_pic_flag;
         }
         //     //解析宏块数据
@@ -460,7 +460,7 @@ void slice::ParseSliceData()
             else
             {
                 // 否则读取结束标志看是不是结束了（片结束标志）
-                ps->end_of_slice_flag = pa->read_ae(276);            //片结束标记
+                ps->end_of_slice_flag = pa->read_ae(0x00276000U);            //片结束标记
                 moreDataFlag = !ps->end_of_slice_flag;  //如果片结束，那么moreDataFlag为0，此循环之后停止运行
                 //if(ps->end_of_slice_flag == 1)  printf(">>slice: end mb: (%d,%d)\n", mb->position_x, mb->position_y);
             }
