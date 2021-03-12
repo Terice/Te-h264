@@ -279,7 +279,7 @@ void Prediction_Inter(\
     type_macroblock type = current->type;
     int part = current->num_mb_part;
 
-    int mvLX[2] = {mv_lx[mbPartIdx][subMbPartIdx].x, mv_lx[mbPartIdx][subMbPartIdx].y};
+    int mvLX[2] = {mv_lx[mbPartIdx][subMbPartIdx][0], mv_lx[mbPartIdx][subMbPartIdx][1]};
     //xAL 是子块、子子块的图片中的绝对起始坐标
     int yAL = current->pos.x * 16, yBL = 0;
     int xAL = current->pos.y * 16, xBL = 0;

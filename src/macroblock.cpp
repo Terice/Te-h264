@@ -180,19 +180,19 @@ void macroblock::Parse_Sub(int* noSubMbPartSizeLessThan8x8Flag)
             {
                 // for(compIdx = 0; compIdx < 2; compIdx++)
                 // {
-                    mvd_l1[mbPartIdx][subMbPartIdx].x =  pa->read_ae(0x00043000U | ((uint32)mbPartIdx << 8) | (subMbPartIdx << 4)  | (0U << 1) | 0U);
-                    mvd_l1[mbPartIdx][subMbPartIdx].y =  pa->read_ae(0x00043000U | ((uint32)mbPartIdx << 8) | (subMbPartIdx << 4)  | (1U << 1) | 0U);
+                    mvd_l1[mbPartIdx][subMbPartIdx][0] =  pa->read_ae(0x00043000U | ((uint32)mbPartIdx << 8) | (subMbPartIdx << 4)  | (0U << 1) | 0U);
+                    mvd_l1[mbPartIdx][subMbPartIdx][1] =  pa->read_ae(0x00043000U | ((uint32)mbPartIdx << 8) | (subMbPartIdx << 4)  | (1U << 1) | 0U);
                 // }
                 // pic->get_MvNeighbour(this, mbPartIdx, subMbPartIdx, 0, mvp_l0);
                 if(terr.inter_movevector())
                 {
-                    printf(">>mvd_l0: (%d, %d) in 4x4sub\n", mvd_l0[mbPartIdx][subMbPartIdx].x, mvd_l0[mbPartIdx][subMbPartIdx].y);
-                    printf(">>mv_l0 : (%d, %d) in 4x4sub\n", mv_l0[mbPartIdx][subMbPartIdx].x, mv_l0[mbPartIdx][subMbPartIdx].y);
+                    printf(">>mvd_l0: (%d, %d) in 4x4sub\n", mvd_l0[mbPartIdx][subMbPartIdx][0], mvd_l0[mbPartIdx][subMbPartIdx][1]);
+                    printf(">>mv_l0 : (%d, %d) in 4x4sub\n", mv_l0[mbPartIdx][subMbPartIdx][0], mv_l0[mbPartIdx][subMbPartIdx][1]);
                 }
 
                 // 读取到mvp和mvd就可以计算出来mv了
-                mv_l0[mbPartIdx][subMbPartIdx].x += mvd_l0[mbPartIdx][subMbPartIdx].x;
-                mv_l0[mbPartIdx][subMbPartIdx].y += mvd_l0[mbPartIdx][subMbPartIdx].y;
+                mv_l0[mbPartIdx][subMbPartIdx][0] += mvd_l0[mbPartIdx][subMbPartIdx][0];
+                mv_l0[mbPartIdx][subMbPartIdx][1] += mvd_l0[mbPartIdx][subMbPartIdx][1];
             }
         else if(sub[mbPartIdx].type == B_Direct_8x8)
         {
@@ -213,18 +213,18 @@ void macroblock::Parse_Sub(int* noSubMbPartSizeLessThan8x8Flag)
                     
                     // for(compIdx = 0; compIdx < 2; compIdx++) 
                     // {
-                        mvd_l1[mbPartIdx][subMbPartIdx].x =  pa->read_ae(0x00043000U | ((uint32)mbPartIdx << 8) | (subMbPartIdx << 4)  | (0U << 1) | 1U);
-                        mvd_l1[mbPartIdx][subMbPartIdx].y =  pa->read_ae(0x00043000U | ((uint32)mbPartIdx << 8) | (subMbPartIdx << 4)  | (1U << 1) | 1U);
+                        mvd_l1[mbPartIdx][subMbPartIdx][0] =  pa->read_ae(0x00043000U | ((uint32)mbPartIdx << 8) | (subMbPartIdx << 4)  | (0U << 1) | 1U);
+                        mvd_l1[mbPartIdx][subMbPartIdx][1] =  pa->read_ae(0x00043000U | ((uint32)mbPartIdx << 8) | (subMbPartIdx << 4)  | (1U << 1) | 1U);
                     // }
                     if(terr.inter_movevector())
                     {
-                        printf(">>mvd_l1: (%d, %d) in 4x4sub\n", mvd_l1[mbPartIdx][subMbPartIdx].x, mvd_l1[mbPartIdx][subMbPartIdx].y);
-                        printf(">>mv_l1 : (%d, %d) in 4x4sub\n", mv_l1[mbPartIdx][subMbPartIdx].x, mv_l1[mbPartIdx][subMbPartIdx].y);
+                        printf(">>mvd_l1: (%d, %d) in 4x4sub\n", mvd_l1[mbPartIdx][subMbPartIdx][0], mvd_l1[mbPartIdx][subMbPartIdx][1]);
+                        printf(">>mv_l1 : (%d, %d) in 4x4sub\n", mv_l1[mbPartIdx][subMbPartIdx][0], mv_l1[mbPartIdx][subMbPartIdx][1]);
                     }
 
                     // 读取到mvp和mvd就可以计算出来mv了
-                    mv_l1[mbPartIdx][subMbPartIdx].x += mvd_l1[mbPartIdx][subMbPartIdx].x;
-                    mv_l1[mbPartIdx][subMbPartIdx].y += mvd_l1[mbPartIdx][subMbPartIdx].y;
+                    mv_l1[mbPartIdx][subMbPartIdx][0] += mvd_l1[mbPartIdx][subMbPartIdx][0];
+                    mv_l1[mbPartIdx][subMbPartIdx][1] += mvd_l1[mbPartIdx][subMbPartIdx][1];
 
                     // pic->get_MvNeighbour(this, mbPartIdx, subMbPartIdx, 1, mvp_l1);
                 }
@@ -353,16 +353,16 @@ void macroblock::Parse_Inter()
         predmode = MbPartPredMode(type, mbPartIdx);
         if(predmode != Pred_L1 && predmode != Pred_NU)
         {
-            mvd_l0[mbPartIdx][0].x = pa->read_ae(0x00043000U | ((uint32)mbPartIdx << 8) | (0U << 4)  | (0U << 1) | 0U); 
-            mvd_l0[mbPartIdx][0].y = pa->read_ae(0x00043000U | ((uint32)mbPartIdx << 8) | (0U << 4)  | (1U << 1) | 0U); 
+            mvd_l0[mbPartIdx][0][0] = pa->read_ae(0x00043000U | ((uint32)mbPartIdx << 8) | (0U << 4)  | (0U << 1) | 0U); 
+            mvd_l0[mbPartIdx][0][1] = pa->read_ae(0x00043000U | ((uint32)mbPartIdx << 8) | (0U << 4)  | (1U << 1) | 0U); 
             pic->neighbour_motionvector(this, mbPartIdx, 0, 0, mvp_l0);
-            mv_l0[mbPartIdx][0].x = mvp_l0[mbPartIdx][0].x +  mvd_l0[mbPartIdx][0].x;
-            mv_l0[mbPartIdx][0].y = mvp_l0[mbPartIdx][0].y +  mvd_l0[mbPartIdx][0].y;
+            mv_l0[mbPartIdx][0][0] = mvp_l0[mbPartIdx][0][0] +  mvd_l0[mbPartIdx][0][0];
+            mv_l0[mbPartIdx][0][1] = mvp_l0[mbPartIdx][0][1] +  mvd_l0[mbPartIdx][0][1];
             if(terr.inter_movevector())
             {
-                printf(">>mvd_l0: (%d, %d)\n", mvd_l0[mbPartIdx][0].x, mvd_l0[mbPartIdx][0].y);
-                printf(">>mvp_l0: (%d, %d)\n", mvp_l0[mbPartIdx][0].x, mvp_l0[mbPartIdx][0].y);
-                printf(">>mv_l0 : (%d, %d)\n",  mv_l0[mbPartIdx][0].x,  mv_l0[mbPartIdx][0].y);
+                printf(">>mvd_l0: (%d, %d)\n", mvd_l0[mbPartIdx][0][0], mvd_l0[mbPartIdx][0][1]);
+                printf(">>mvp_l0: (%d, %d)\n", mvp_l0[mbPartIdx][0][0], mvp_l0[mbPartIdx][0][1]);
+                printf(">>mv_l0 : (%d, %d)\n",  mv_l0[mbPartIdx][0][0],  mv_l0[mbPartIdx][0][1]);
             }
         }
     }
@@ -372,16 +372,16 @@ void macroblock::Parse_Inter()
         predmode = MbPartPredMode( type, mbPartIdx);
         if(predmode != Pred_L0 && predmode != Pred_NU)
         {
-            mvd_l1[mbPartIdx][0].x = pa->read_ae(0x00043000U | ((uint32)mbPartIdx << 8) | (0U << 4)  | (0U << 1) | 1);
-            mvd_l1[mbPartIdx][0].y = pa->read_ae(0x00043000U | ((uint32)mbPartIdx << 8) | (0U << 4)  | (1U << 1) | 1);
+            mvd_l1[mbPartIdx][0][0] = pa->read_ae(0x00043000U | ((uint32)mbPartIdx << 8) | (0U << 4)  | (0U << 1) | 1);
+            mvd_l1[mbPartIdx][0][1] = pa->read_ae(0x00043000U | ((uint32)mbPartIdx << 8) | (0U << 4)  | (1U << 1) | 1);
             pic->neighbour_motionvector(this, mbPartIdx, 0, 1, mvp_l1);
-            mv_l1[mbPartIdx][0].x = mvp_l1[mbPartIdx][0].x + mvd_l1[mbPartIdx][0].x;
-            mv_l1[mbPartIdx][0].y = mvp_l1[mbPartIdx][0].y + mvd_l1[mbPartIdx][0].y;
+            mv_l1[mbPartIdx][0][0] = mvp_l1[mbPartIdx][0][0] + mvd_l1[mbPartIdx][0][0];
+            mv_l1[mbPartIdx][0][1] = mvp_l1[mbPartIdx][0][1] + mvd_l1[mbPartIdx][0][1];
             if(terr.inter_movevector())
             {
-                printf(">>mvd_l1: (%d, %d)\n", mvd_l1[mbPartIdx][0].x, mvd_l1[mbPartIdx][0].y);
-                printf(">>mvp_l1: (%d, %d)\n", mvp_l1[mbPartIdx][0].x, mvp_l1[mbPartIdx][0].y);
-                printf(">> mv_l1: (%d, %d)\n",  mv_l1[mbPartIdx][0].x,  mv_l1[mbPartIdx][0].y);
+                printf(">>mvd_l1: (%d, %d)\n", mvd_l1[mbPartIdx][0][0], mvd_l1[mbPartIdx][0][1]);
+                printf(">>mvp_l1: (%d, %d)\n", mvp_l1[mbPartIdx][0][0], mvp_l1[mbPartIdx][0][1]);
+                printf(">> mv_l1: (%d, %d)\n",  mv_l1[mbPartIdx][0][0],  mv_l1[mbPartIdx][0][1]);
             }
         }
     }
@@ -447,9 +447,9 @@ void macroblock::ParseHead()
 
     if(type == I_PCM) // PCM 宏块直接按照 固定的方法读取
     {
-        for(unsigned i = 0; i < 256; i++) 
+        for(unsigned i = 0; i < 256; i++) // 16 * 16
             pa->read_un(pa->pV->BitDepthY);
-        for(unsigned i = 0; i < 2 * (8 * 8); i++) 
+        for(unsigned i = 0; i < 128; i++) // 2 * 8 * 8
             pa->read_un(pa->pV->BitDepthC);
 
         return ;// PCM 宏块结束 返回
@@ -524,7 +524,7 @@ void macroblock::ParseHead()
     {
         coded_block_pattern = 1;
         CodedBlockPatternChroma = macroBlockInfo_I_slice[mb_type][3];
-        CodedBlockPatternLuma = macroBlockInfo_I_slice[mb_type][4];
+        CodedBlockPatternLuma   = macroBlockInfo_I_slice[mb_type][4];
     }
     
     //残差读不读是由 code_block_pattern 来决定的

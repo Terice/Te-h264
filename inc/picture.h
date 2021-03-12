@@ -29,6 +29,24 @@ private:
     pixel *picpix;
     // 当前的slice
     slice *sl;
+    /**
+        @param current 当前宏块
+        @param index 索引，zig-zag扫描
+        @param direction 方向
+        @param width_part 当前part的宽，
+        @param height_part 当前part的高
+        @param width_all 当前宏块的宽
+        @param height_all 当前宏块的高
+        @param index_result 返回的索引指针
+        @param result 返回的宏块指针
+    */
+    void neighbour_part(\
+        macroblock *current, int index, \
+        char direction, \
+        int width_part, int height_part,\
+        int width_all , int height_all, \
+        int * index_result, macroblock *result
+    );
 public:
     picture(parser*, decoder*);
     ~picture();
@@ -58,12 +76,14 @@ public:
     // 所以这些函数需要放在这里
 
     // 得到4x4块的周围情况
-    void        neighbour_4x4block(macroblock *current, int index_current, char direction, macroblock **target, int *index_target, int *x = NULL, int *y = NULL);
+    // 宏块大小为 16x16 
+    // 输入的idx_4x4 必须是zig-zag扫描模式
+    void        neighbour_4x4block(macroblock *current, int idx_4x4, char direction, int *index_target, macroblock **info);
     // 得到相邻宏块的情况
     macroblock* neighbour_macroblock(macroblock* cur, char direction);
     // 根据周围的运动矢量来预测当前part(subpart)的情况
     void        neighbour_motionvector(macroblock *current, uint8 mbPartIdx, uint8 subPartIdx, uint8 direction, MotionVector **mv_lx);
-    void        neighbour_part();
+
 
     // 指明当前图像是不是IDR图像
     bool IdrPicFlag;
@@ -104,4 +124,6 @@ public:
     void set_NotUseForRef()     {state_ref =  Nun_ref   ;};
     void set_NotExist()         {state_ref =  Nul_exist ;};
 };
+
+
 #endif

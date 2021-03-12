@@ -52,9 +52,14 @@ public:
     // 解码残差值
     void DecodeData();
 
-
-    block **luma;
-    block **chroma;
+    // luma[0] 16x16 DC
+    //          4x4
+    //          8x8
+    // luma[1] 16x16 AC
+    block *luma;
+    // chroma[0] chromaDC
+    // chroma[1] chromaAC
+    block *chroma;
 
 };
 

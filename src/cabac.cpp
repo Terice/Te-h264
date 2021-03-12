@@ -21,6 +21,7 @@
 #include "parser.h"
 #include <iostream>
 #include "slice.h"
+#include <string.h>
 
 
 
@@ -76,11 +77,29 @@ uint32 cabac::Decode(uint32 syntaxelements)
     else if(syntax == 0x62U) result = read_significant_coeff_flag      (syntaxelements);
     else if(syntax == 0x63U) result = read_last_significant_coeff_flag (syntaxelements);
     else if(syntax == 0x64U) result = read_coeff_abs_level_minus1      (syntaxelements);
-    else if(syntax == 0x65U) result = DecodeValueUsingCtxIdx           (0, 1);
-    else if(syntax == 0x76U) result = DecodeValueUsingCtxIdx           (276, 0);
+    else if(syntax == 0x65U) result = decode_bypass(); 
+    // 这个实际上是276 ，但是2那一位在上面的句法中又有别的用处，所以这里只取 76 ，其他的避开 76 就好了
+    else if(syntax == 0x76U) result = decode_finaly();
     else ;
 
     return result;
+}
+uint8 inline cabac::decode_binary(uint16 ctx){return DecodeValueUsingCtxIdx(ctx, 0);}
+uint8 inline cabac::decode_bypass()          {return DecodeValueUsingCtxIdx(0, 1);  }
+uint8 inline cabac::decode_finaly()          {return DecodeValueUsingCtxIdx(276, 0);}
+int cabac::decode_unary(uint16 ctx, int offset)
+{
+    int result = 0;
+    if(decode_binary(ctx)) // 先解一位不换ctx
+    {
+        result++;
+        while (decode_binary(ctx + offset)) // 解完就换ctx
+            result++;
+        return result;
+    }
+    else
+        return 0;
+    
 }
 bool cabac::DecodeValueUsingCtxIdx(uint16 ctxIdx_value, uint8 bypassFlag_value)
 {
@@ -90,7 +109,7 @@ bool cabac::DecodeValueUsingCtxIdx(uint16 ctxIdx_value, uint8 bypassFlag_value)
     if(bypassFlag_value)//decode bypass
     {
         codIOffset = codIOffset << 1;
-        codIOffset = codIOffset | p->read_bi();
+        codIOffset = codIOffset | pa->read_bi();
         if(codIOffset >= codIRange) {binVal = 1; codIOffset = codIOffset - codIRange;}
         else binVal = 0;
         if(terr.cabac_state_running())     
@@ -170,7 +189,7 @@ void cabac::RenormD()
     {
         codIRange  <<= 1;
         codIOffset <<= 1;
-        codIOffset |= (uint8_t)(p->read_bi());
+        codIOffset |= (uint8_t)(pa->read_bi());
     }
 }
 //上下文变量的初始化
@@ -235,46 +254,10 @@ uint8 cabac::init_variable()
 uint8 cabac::init_engine()
 {
     codIRange = 510;
-    codIOffset = p->read_un(9);
+    codIOffset = pa->read_un(9);
     return 1;
 }
 
-// 是否是mbtype的二值化串
-// 返回的是值的索引，
-int InBinarization(uint16 result, int binIdx, const uint8 binarization_chart[][2])
-{
-    int re = -1;
-    uint8 chart_length = 0;
-
-    if(binarization_chart == binarization_mbtype_in_I) chart_length = 26;
-    else if(binarization_chart == binarization_mbtype_in_PandSP) chart_length = 6;
-    else /*mbtype B*/chart_length = 24;
-
-    for(int i = 0; i < chart_length; i++)
-        if(result == binarization_chart[i][0] && binarization_chart[i][1] == binIdx + 1){re = i; break;}
-    return re;
-}
-// 是不是submbtype的二值化串
-int InBinarizationSub(uint16 result, int binIdx, const uint8 binarization_chart[][2])
-{
-    int re = -1;
-    uint8 chart_length = 0;
-
-    if(binarization_chart == binarization_submbtype_in_PandSP) chart_length = 4;
-    else /*if(binarization_chart == binarization_submbtype_in_B)*/ chart_length = 13;
-
-    for(int i = 0; i < chart_length; i++)
-        if(result == binarization_chart[i][0] && binarization_chart[i][1] == binIdx + 1){re = i; break;}
-    return re;
-}
-
-
-bool cabac::Binarization_mbtype_submbtype(uint16 &maxBinIdxCtx, int &ctxIdxOffset, uint8 &bypassFlag)
-{
-    if(lifeTimeSlice->type == I){maxBinIdxCtx = 6; ctxIdxOffset = 3; bypassFlag = 0;return true;}
-    else if(lifeTimeSlice->type == SI){return true;}
-    else return false;
-}
 uint16 cabac::read_mb_type()
 {
     uint16 result = 0;
@@ -709,7 +692,6 @@ uint8 cabac::read_transform_8x8_size_flag()
     ctxIdxInc = condTermFlagA + condTermFlagB;
     ctxIdx = ctxIdxInc + 399;
 
-
     result = decode_binary(ctxIdx);
 
     return result;
@@ -721,101 +703,196 @@ uint16 cabac::read_coded_block_pattern()
     uint8 prefix_ctxIdxOffset = 73, suffix_ctxIdxOffset = 77;
     //maxBin:                     3                          1
     //prefix: FL cMax = 15
-    
+    // 前缀是亮度的编码，后缀是色度的编码
     
     uint8 result_cur = 0;
     uint16 result = 0;
     macroblock* currentMB = lifeTimeSlice->curMB;
     macroblock* A = NULL, * B = NULL;
     //prefix
-    uint16 prefix_ctxIdxInc = 0;
-    uint16 prefix_result = 0;
-    int binIdx = -1;
+    // uint16 prefix_ctxIdxInc = 0;
+    // uint16 prefix_result = 0;
+    // int binIdx = -1;
     int tmp;
 
-    uint8  condTermFlagA = 0,  condTermFlagB = 0;
-    tmp = 0;
-    do
+    // uint8  condTermFlagA = 0,  condTermFlagB = 0;
+    // tmp = 0;
+    // do
+    // {
+    //     binIdx++;// sumi
+    //     A = pic->get_BLneighbour(currentMB, 'A', binIdx, 0x012, tmp);
+    //     if(!A || A->type == I_PCM ||\
+    //       (A != currentMB && (A->type != P_Skip || A->type != B_Skip) && ((A->CodedBlockPatternLuma >> tmp) & 1) != 0)||\
+    //       (A == currentMB && (((prefix_result >> tmp) & 0x1) != 0)))
+    //         condTermFlagA = 0;
+    //     else condTermFlagA = 1;
+    //     B = pic->get_BLneighbour(currentMB, 'B', binIdx, 0x012, tmp);
+    //     if(!B || B->type == I_PCM ||\
+    //       (B != currentMB && (B->type != P_Skip || B->type != B_Skip) && ((B->CodedBlockPatternLuma >> tmp) & 1) != 0)||\
+    //       (B == currentMB && (((prefix_result >> tmp) & 0x1) != 0)))
+    //         condTermFlagB = 0;
+    //     else condTermFlagB = 1;
+    //     prefix_ctxIdxInc = condTermFlagA + 2 * condTermFlagB;
+    //     ctxIdx = prefix_ctxIdxInc + prefix_ctxIdxOffset;
+    //     result_cur = (uint8_t)DecodeValueUsingCtxIdx(ctxIdx, 0);
+    //     result_cur = result_cur << binIdx;
+    //     prefix_result += result_cur;
+    // } while(binIdx < 3);
+
+    int condTermFlagA = 0, condTermFlagB = 0; // 分别表示两个方向上的 编码的这个bin值是不是 1
+    // 前缀用来求解亮度的编码模式，以 8x8 大小的块来描述
+    byte cbp[8];// 0 1 2 3 表示当前， 4 5 表示 A， 6，7 表示B
+    /*
+        x | 6 | 7 |
+        -----------
+        4 | 0 | 1 |
+        5 | 2 | 3 |
+    */
+    memset(cbp, 0, 8);
+    // 因为 coded_block_pattern 是一次读完所有的 8x8 ，一定是会需要到周围的宏块的数据的
+    if(A) // A 如果是 NULL，那么这个也就是 0 
     {
-        binIdx++;// sumi
-        A = pic->get_BLneighbour(currentMB, 'A', binIdx, 0x012, tmp);
-        if(!A || A->type == I_PCM ||\
-          (A != currentMB && (A->type != P_Skip || A->type != B_Skip) && ((A->CodedBlockPatternLuma >> tmp) & 1) != 0)||\
-          (A == currentMB && (((prefix_result >> tmp) & 0x1) != 0)))
-            condTermFlagA = 0;
-        else condTermFlagA = 1;
-        B = pic->get_BLneighbour(currentMB, 'B', binIdx, 0x012, tmp);
-        if(!B || B->type == I_PCM ||\
-          (B != currentMB && (B->type != P_Skip || B->type != B_Skip) && ((B->CodedBlockPatternLuma >> tmp) & 1) != 0)||\
-          (B == currentMB && (((prefix_result >> tmp) & 0x1) != 0)))
-            condTermFlagB = 0;
-        else condTermFlagB = 1;
-        prefix_ctxIdxInc = condTermFlagA + 2 * condTermFlagB;
-        ctxIdx = prefix_ctxIdxInc + prefix_ctxIdxOffset;
-        result_cur = (uint8_t)DecodeValueUsingCtxIdx(ctxIdx, 0);
-        result_cur = result_cur << binIdx;
-        prefix_result += result_cur;
-    } while(binIdx < 3);
-
-    uint16 suffix_ctxIdxInc = 0;
-    uint16 suffix_result = 0;
-    tmp = 0;
-    binIdx = -1;
-    do
+        // PCM 宏块 和 Skip 宏块没有 残差，也就没有这个编码系数
+        if(A->type != I_PCM && !A->mb_skip_flag)
+        {
+            cbp[4] = A->CodedBlockPatternLuma & 2;
+            cbp[5] = A->CodedBlockPatternLuma & 8;
+        }
+    }
+    if(B)
     {
-        binIdx++;// sumi
-        A = pic->neighbour_macroblock(currentMB, 'A');
-        if(A && A->type == I_PCM) condTermFlagA = 1;
-        else if((!A || A->type == P_Skip || A->type == B_Skip) ||\
-                (binIdx == 0 && A->CodedBlockPatternChroma == 0) ||\
-                (binIdx == 1 && A->CodedBlockPatternChroma != 2))
-            condTermFlagA = 0;
-        else condTermFlagA = 1;
-        B = pic->neighbour_macroblock(currentMB, 'B');
-        if(B && B->type == I_PCM) condTermFlagB = 1;
-        else if((!B || B->type == P_Skip || B->type == B_Skip) ||\
-                (binIdx == 0 && B->CodedBlockPatternChroma == 0) ||\
-                (binIdx == 1 && B->CodedBlockPatternChroma != 2))
-            condTermFlagB = 0;
-        else condTermFlagB = 1;
-        suffix_ctxIdxInc = condTermFlagA + 2 * condTermFlagB + ((binIdx == 1) ? 4 : 0);
-        ctxIdx = suffix_ctxIdxInc + suffix_ctxIdxOffset;
-        result_cur = (uint8_t)DecodeValueUsingCtxIdx(ctxIdx, 0);
-        result_cur = result_cur << binIdx;
-        suffix_result += result_cur;
-    } while(IsIn_TU_binarization(suffix_result, 2, binIdx) == -1);
-    suffix_result = IsIn_TU_binarization(suffix_result, 2, binIdx);
-    suffix_result <<= 4;
-    result = prefix_result + suffix_result;
-
-
-    return result;
-
-    //suffix: TU cMax = 2;
+        if(A->type != I_PCM && !A->mb_skip_flag)
+        {
+            cbp[6] = A->CodedBlockPatternLuma & 4;
+            cbp[7] = A->CodedBlockPatternLuma & 8;
+        }
+    }
+    condTermFlagA = cbp[4]; condTermFlagB = cbp[6];
+    // 上面的flag是乘以 2 ，左边的是 乘以 1 然后加上offset 就是 上下文索引了
+    ctxIdx = condTermFlagA + 2 * condTermFlagB + prefix_ctxIdxOffset;
+    cbp[0] = decode_binary(ctxIdx);
+    // 后面3个类似，等式就不多写了
+    // 因为 8x8 block的周围有出现是本宏块的情况
+    // 但是这样写死之后，之前都能解码出来，所以就能用了
+    // 也就不用判断之前已经解码的是否可用了
+    cbp[1] = decode_binary(cbp[0] + 2 * cbp[7] + prefix_ctxIdxOffset);
+    cbp[2] = decode_binary(cbp[5] + 2 * cbp[0] + prefix_ctxIdxOffset);
+    cbp[3] = decode_binary(cbp[2] + 2 * cbp[1] + prefix_ctxIdxOffset);
+    for (int i = 0; i < 4; i++)
+    {   // 分别移位运算，放到正确的位置上
+        result |= cbp[i] << i;
+    }
+    // uint16 suffix_ctxIdxInc = 0;
+    // uint16 suffix_result = 0;
+    // tmp = 0;
+    // binIdx = -1;
+    // do
+    // {
+    //     binIdx++;// sumi
+    //     A = pic->neighbour_macroblock(currentMB, 'A');
+    //     if(A && A->type == I_PCM) condTermFlagA = 1;
+    //     else if((!A || A->type == P_Skip || A->type == B_Skip) ||\
+    //             (binIdx == 0 && A->CodedBlockPatternChroma == 0) ||\
+    //             (binIdx == 1 && A->CodedBlockPatternChroma != 2))
+    //         condTermFlagA = 0;
+    //     else condTermFlagA = 1;
+    //     B = pic->neighbour_macroblock(currentMB, 'B');
+    //     if(B && B->type == I_PCM) condTermFlagB = 1;
+    //     else if((!B || B->type == P_Skip || B->type == B_Skip) ||\
+    //             (binIdx == 0 && B->CodedBlockPatternChroma == 0) ||\
+    //             (binIdx == 1 && B->CodedBlockPatternChroma != 2))
+    //         condTermFlagB = 0;
+    //     else condTermFlagB = 1;
+    //     suffix_ctxIdxInc = condTermFlagA + 2 * condTermFlagB + ((binIdx == 1) ? 4 : 0);
+    //     ctxIdx = suffix_ctxIdxInc + suffix_ctxIdxOffset;
+    //     result_cur = (uint8_t)DecodeValueUsingCtxIdx(ctxIdx, 0);
+    //     result_cur = result_cur << binIdx;
+    //     suffix_result += result_cur;
+    // } while(IsIn_TU_binarization(suffix_result, 2, binIdx) == -1);
+    // suffix_result = IsIn_TU_binarization(suffix_result, 2, binIdx);
+    // suffix_result <<= 4;
+    // result = prefix_result + suffix_result;
     
+    //suffix: TU cMax = 2;
+    // 后缀用来描述色度的编码模式，以全宏块为尺寸
+    condTermFlagA = condTermFlagB = 1;
+    bool a_avaiable = true;
+    bool b_avaiable = true;
+    if(!A || A->mb_skip_flag)  a_avaiable = false;
+    if(!B || B->mb_skip_flag)  b_avaiable = false;
+
+    // 解第一位
+    // 除了这种情况之外，condTermFlagN 都是 1 ，包括宏块 N 是 I_PCM 宏块
+    condTermFlagA = (!a_avaiable || A->CodedBlockPatternChroma == 0) ? 0 : 1;
+    condTermFlagB = (!b_avaiable || B->CodedBlockPatternChroma == 0) ? 0 : 1;
+
+    ctxIdx = condTermFlagA + 2 * condTermFlagB + 4 + suffix_ctxIdxOffset; // binIdx == 1, 中间要+4
+    if(decode_binary(ctxIdx))
+    {
+        condTermFlagA = (!a_avaiable || A->CodedBlockPatternChroma != 2) ? 0 : 1;
+        condTermFlagB = (!b_avaiable || B->CodedBlockPatternChroma != 2) ? 0 : 1;
+        ctxIdx = condTermFlagA + 2 * condTermFlagB + suffix_ctxIdxOffset; // binIdx == 2, 中间要+0
+        if(decode_binary(ctxIdx))
+            result |= 3 << 4;// 0011xxxx AC DC 都传送
+        else
+            result |= 1 << 4;// 0001xxxx 只传输 DC
+    }
+    else
+        result += 0;// AC 和 DC 都不传送，就是 0
+    return result;
 }
 int8 cabac::read_mb_qp_delta()
 {
-    int syntaxRequest = 0;
-    uint16  ctxIdx_cur = 0;
-    uint64 result_cur = 0;
-    uint64 result = 0;
-    int isResult = 0;
-    int binIdx = -1;
-    do
+    // int syntaxRequest = 0;
+    // uint16  ctxIdx_cur = 0;
+    // uint64 result_cur = 0;
+    // uint64 result = 0;
+    // int isResult = 0;
+    // int binIdx = -1;
+    // do
+    // {
+    //     binIdx++;// sumi
+        // ctxIdx_cur = DecodeCtxIdxUsingBinIdx(binIdx, 2, 60, 0);
+    //     result_cur = (uint8_t)DecodeValueUsingCtxIdx(ctxIdx_cur, 0);
+    //     // printf(">>cabac: mb_qp_delta_cur :%d\n", result_cur);
+    //     result_cur <<= binIdx;
+    //     result += result_cur;
+    // } while((isResult = IsIn_U_binarization(result, binIdx)) == -1);
+    // result = isResult;
+    // result = pow((-1), (result + 1)) * (ceil((double)result / 2));
+
+    // if(binIdx == 0)
+    // {
+    //     macroblock* currentMB = lifeTimeSlice->curMB;
+    //     macroblock*  prevMB = lifeTimeSlice->get_mbUsingIdInSlice(currentMB->idx_inslice - 1);
+    //     if((prevMB == NULL || (prevMB->type == P_Skip || prevMB->type == B_Skip)) ||\
+    //         prevMB->type == I_PCM||\
+    //     (prevMB->premode != Intra_16x16 && (prevMB->CodedBlockPatternChroma == 0 && prevMB->CodedBlockPatternLuma == 0)) ||\
+    //     prevMB->mb_qp_delta == 0
+    //     )  ctxIdxInc = 0;
+    //     else ctxIdxInc = 1;
+    // }
+    // else if(binIdx == 1) {ctxIdxInc = 2;}
+    // else {ctxIdxInc = 3;}
+
+    int result = 0;
+    int ctxIdxOffset = 60;
+    int sig;
+    // Unary binarization
+    ctxIdx = lifeTimeSlice->last_mb_qp_delta == 0 ? 0 : 1 + ctxIdxOffset;
+    result = decode_binary(ctxIdx);
+    if(!result) return 0;
+    else
     {
-        binIdx++;// sumi
-        ctxIdx_cur = DecodeCtxIdxUsingBinIdx(binIdx, 2, 60, 0);
-        result_cur = (uint8_t)DecodeValueUsingCtxIdx(ctxIdx_cur, 0);
-        // printf(">>cabac: mb_qp_delta_cur :%d\n", result_cur);
-        result_cur <<= binIdx;
-        result += result_cur;
-    } while((isResult = IsIn_U_binarization(result, binIdx)) == -1);
-    result = isResult;
-    result = pow((-1), (result + 1)) * (ceil((double)result / 2));
-    
+        // 换上下文
+        ctxIdx = 2 + ctxIdxOffset;
+        // decode_unary 解一次之后还会换上下文 ： ctxIdx + offset
+        result += decode_unary(ctxIdx, 1);
+        sig = result & 0x1 ? -1 : 1; // 看result是不是 2 的倍数，来确定符号
+        result = sig * (result + 1 >> 1);// +1 >> 1 就相当与 ceil(result/2)
+    }
+    lifeTimeSlice->last_mb_qp_delta = result;
     return result;
-    
 }
 uint8 cabac::read_significant_coeff_flag(int syntaxelement)
 {
@@ -839,7 +916,7 @@ uint8 cabac::read_significant_coeff_flag(int syntaxelement)
     else ctxIdxInc = ctxIncForCtxBlockCat[levelListIdx][0];
 
     ctxIdx = (int)ctxIdxInc + (int)ctxIdxBlockCatOffsetOfctxBlockCat[1][ctxBlockCat] + (int)ctxIdxOffset;
-    uint8 result = DecodeValueUsingCtxIdx(ctxIdx, 0);
+    uint8 result = decode_binary(ctxIdx);
     return result;
 
 }
@@ -853,7 +930,7 @@ uint8 cabac::read_last_significant_coeff_flag(int syntaxelement)
     uint8 levelListIdx = syntaxelement >> 20;
 
     //get ctxIdxOffset
-    uint16 ctxIdxOffset = 0;
+    int ctxIdxOffset = 0;
     if(ctxBlockCat < 5) ctxIdxOffset = 166;
     else if(ctxBlockCat == 5) ctxIdxOffset = 417;
     else if(ctxBlockCat > 5 && ctxBlockCat < 9) ctxIdxOffset = 572;
@@ -872,102 +949,130 @@ uint8 cabac::read_last_significant_coeff_flag(int syntaxelement)
 
     return result;
 }
+
+enum BlockType{
+    LUMA_16x16_DC = 0,// Luma16x16DC
+    LUMA_16x16_AC = 1,// Luma16x16AC
+    LUMA_4x4      = 2,// Luma4x4
+    CHROMA_DC     = 3,// ChromaDC
+    CHROMA_AC     = 4,// ChromaAC
+    LUMA_8x8      = 5,// Luma8x8
+    CHROMA_CB_DC,
+    CHROMA_CB_AC,
+    CHROMA_CB_4x4,
+    CHROMA_CB_8x8,
+    CHROMA_CR_DC,
+    CHROMA_CR_AC,
+    CHROMA_CR_4x4,
+    CHROMA_CR_8x8,
+};
 uint8 cabac::read_coded_block_flag(int syntaxelement)
 {
     //get ctxBlockCat and maxNumCoeff
 
-    uint8 ctxBlockCat = (syntaxelement >> 8) & 0xF;
+    uint8 ctxBlockCat = (syntaxelement & 0x00000F00U) >> 8;// (syntaxelement >> 8) & 0xF;
     uint8 maxNumCoeff = coded_blokc_flag_maxNumCoeff[ctxBlockCat];
-    uint8 iCbCr = (syntaxelement >> 4) & 0xF;
-    uint8 index = (syntaxelement) & 0xF;
+    uint8 iCbCr =       (syntaxelement & 0x000000F0U) >> 4;//(syntaxelement >> 4) & 0xF;
+    uint8 index =       (syntaxelement & 0x0000000FU);
 
+    //get tranblock
+    macroblock* current = lifeTimeSlice->curMB;
+    MacroBlockNeighInfo *A = &current->neighbour.A;
+    MacroBlockNeighInfo *B = &current->neighbour.B;
+    
+    // get color component type
     uint8 colorType = 0;
     if(iCbCr == 3) colorType = 1;
     else colorType = iCbCr + 2;
     colorType <<= 4;
 
     uint8 blockType = 0;
-    switch (ctxBlockCat)
-    {
-    case 0:blockType = 0x003;break;
-    case 1:blockType = 0x001;break;
-    case 2:blockType = 0x001;break;
-    case 3:blockType = 0x001;break;
-    case 4:blockType = 0x001;break;
-    case 5:blockType = 0x002;break;
-    default:break;
-    }
+
+    BlockType blk = (BlockType)ctxBlockCat;
     
     //get ctxIdxOffset
-    uint16 ctxIdxOffset = 0;
-    if(ctxBlockCat < 5) ctxIdxOffset = 85;
-    else if(ctxBlockCat > 5 && ctxBlockCat < 9) ctxIdxOffset = 460;
-    else if(ctxBlockCat > 9 && ctxBlockCat < 13) ctxIdxOffset = 472;
-    else if(ctxBlockCat == 5 || ctxBlockCat == 9 || ctxBlockCat == 13) ctxIdxOffset = 1012;
+    uint16 ctxIdxOffset = ctxBlockCat == 5 ? 1012 : 85; // 因为大于 5 的都是 444 的，所以这里不做判断了
+    // if(ctxBlockCat < 5) ctxIdxOffset = 85;
+    // else if(ctxBlockCat > 5 && ctxBlockCat < 9) ctxIdxOffset = 460;
+    // else if(ctxBlockCat > 9 && ctxBlockCat < 13) ctxIdxOffset = 472;
+    // else if(ctxBlockCat == 5 || ctxBlockCat == 9 || ctxBlockCat == 13) ctxIdxOffset = 1012;
     
-    //get tranblock
-    macroblock* currentMB = lifeTimeSlice->curMB;
     int index_A = 0;
-    macroblock* mbAddrA = pic->get_BLneighbour(currentMB, 'A', index, colorType + blockType, index_A);
-    block*  transBlockA;    
     int index_B = 0;
-    macroblock* mbAddrB = pic->get_BLneighbour(currentMB, 'B', index, colorType + blockType, index_B);
+    macroblock* mbAddrA = NULL; pic->neighbour_4x4block(current, index, 'A',  &index_A, &mbAddrA);
+    macroblock* mbAddrB = NULL; pic->neighbour_4x4block(current, index, 'B',  &index_B, &mbAddrB);
+
+    block*  transBlockA;
     block*  transBlockB;
 
     
-    if(ctxBlockCat == 0 || ctxBlockCat == 6 || ctxBlockCat == 10)
+    if(blk == LUMA_16x16_DC)// || ctxBlockCat == 6 || ctxBlockCat == 10) // no additional input
+    // 16x16 DC
+    // 这种方法直接读取全块，宏块级别
     {  
-        auto f = [iCbCr, ctxBlockCat](macroblock* cur, macroblock* N , int index_N)->block*{
+        transBlockA = A->avaiable && A->pointer->predmode == Intra_16x16 ? &A->pointer->re->luma[0] : NULL;
+        transBlockA = B->avaiable && A->pointer->predmode == Intra_16x16 ? &B->pointer->re->luma[0] : NULL;
+        
+    }
+    else if(blk == LUMA_16x16_AC) // iCbCr
+    {
+        auto f = [](macroblock* cur, macroblock* N, int index_N)->block*
+        {
             block* transBlockN = NULL;
-            if((N && cur->is_avaiable(N)) && N->predmode == Intra_16x16)
-                {
-                    if(ctxBlockCat == 0) transBlockN = N->re->luma[1];
-                    else if(ctxBlockCat == 3) transBlockN = N->re->chroma[0]->get_childBlock(iCbCr);
-                    else if(ctxBlockCat == 4) transBlockN = N->re->chroma[1]->get_childBlock(iCbCr)->get_childBlock(index_N);
-                }
+            bool state = N && !N->mb_skip_flag && N->type != I_PCM && ((N->CodedBlockPatternLuma >> (index_N >> 2)) & 1) != 0;
+            if(state && N->transform_size_8x8_flag == 0)
+                transBlockN = &N->re->luma[1][index_N/4][index_N%4];
+            else if(state && N->transform_size_8x8_flag == 1)
+                transBlockN = &N->re->luma[1][index_N >> 2];//
             else transBlockN = NULL;
             return transBlockN;
         };
-        transBlockA = f(currentMB, mbAddrA, index_A);
-        transBlockB = f(currentMB, mbAddrB, index_B);
-    }
-    else if(ctxBlockCat == 1 || ctxBlockCat == 2)
-    {
-        auto f = [iCbCr](macroblock* cur, macroblock* N, int index_N)->block*{
-            block* transBlockN = NULL;
-            if(cur->is_avaiable(N) && (N->type != P_Skip && N->type != B_Skip && N->type != I_PCM) && ((N->CodedBlockPatternLuma >>(index_N >> 2)) & 1) != 0 && N->transform_size_8x8_flag == 0)
-            transBlockN = N->re->luma[0]->get_childBlock(index_N/4)->get_childBlock(index_N%4);
-            else if(cur->is_avaiable(N) && (N->type != P_Skip && N->type != B_Skip && N->type != I_PCM) && ((N->CodedBlockPatternLuma >>(index_N >> 2)) & 1) != 0 && N->transform_size_8x8_flag == 1)
-                transBlockN = NULL;//这里没有认真写，因为fox.264不会出现8x8变换解码
-            else transBlockN = NULL;
-            return transBlockN;
-        };
-        transBlockA = f(currentMB, mbAddrA, index_A);
-        transBlockB = f(currentMB, mbAddrB, index_B);      
-    }
-    else if(ctxBlockCat == 3)
-    {
-        mbAddrA = pic->neighbour_macroblock(currentMB, 'A');
-        mbAddrB = pic->neighbour_macroblock(currentMB, 'B');
-        auto f = [iCbCr](macroblock* cur, macroblock* mbAddrN)->block*{
-            block* transBlockN = NULL;
-            if(mbAddrN && (mbAddrN->type != P_Skip && mbAddrN->type != B_Skip && mbAddrN->type != I_PCM) && mbAddrN->CodedBlockPatternChroma != 0)
-                transBlockN = mbAddrN->re->chroma[0]->get_childBlock(iCbCr);
-            else transBlockN = NULL;
-            return transBlockN;
-        };
-        transBlockA = f(currentMB, mbAddrA);
-        transBlockB = f(currentMB, mbAddrB);
-    }
-    else if(ctxBlockCat == 4)
-    {
-        if(mbAddrA && (mbAddrA->type != P_Skip && mbAddrA->type != B_Skip && mbAddrA->type != I_PCM) && mbAddrA->CodedBlockPatternChroma == 2)
-            transBlockA = mbAddrA->re->chroma[1]->get_childBlock(iCbCr)->get_childBlock(index_A);
-        else transBlockA = NULL;
 
-        if(mbAddrB && (mbAddrB->type != P_Skip && mbAddrB->type != B_Skip && mbAddrB->type != I_PCM) && mbAddrB->CodedBlockPatternChroma == 2)
-            transBlockB = mbAddrB->re->chroma[1]->get_childBlock(iCbCr)->get_childBlock(index_B);
-        else transBlockB = NULL;
+        transBlockA = f(current,  mbAddrA, index_A);
+        transBlockB = f(current,  mbAddrA, index_B);   
+    }
+    else if(blk == LUMA_4x4) // luma4x4BlkIdx.
+    // Luma16x16AC  4x4 
+    // 这两种方法都是按照 i8x8->i4x4 来读取的，block的结构是一样
+    {
+        auto f = [](macroblock* cur, macroblock* N, int index_N)->block*
+        {
+            block* transBlockN = NULL;
+            bool state = N && !N->mb_skip_flag && N->type != I_PCM && ((N->CodedBlockPatternLuma >> (index_N >> 2)) & 1) != 0;
+            if(state && N->transform_size_8x8_flag == 0)
+                transBlockN = &N->re->luma[0][index_N/4][index_N%4];
+            else if(state && N->transform_size_8x8_flag == 1)
+                transBlockN = &N->re->luma[0][index_N >> 2];//
+            else transBlockN = NULL;
+            return transBlockN;
+        };
+
+        transBlockA = f(current,  mbAddrA, index_A);
+        transBlockB = f(current,  mbAddrA, index_B);      
+    }
+    else if(blk == CHROMA_DC) // iCbCr
+    // Chroma DC
+    // 也是全块，
+    {
+        transBlockA = A->avaiable && !A->IPCM && !A->Skip && A->pointer->CodedBlockPatternChroma != 0 ? &A->pointer->re->chroma[0][iCbCr] : NULL;
+        transBlockB = B->avaiable && !B->IPCM && !B->Skip && B->pointer->CodedBlockPatternChroma != 0 ? &B->pointer->re->chroma[0][iCbCr] : NULL;
+    }
+    else if(blk == CHROMA_AC) // chroma4x4BlkIdx iCbCr
+    {
+        auto f = [iCbCr](macroblock * mbAddrN, int index_N)->block*
+        {
+            block* transBlockN = NULL;
+            bool state = mbAddrN && !mbAddrN->mb_skip_flag && mbAddrN->type != I_PCM && mbAddrN->CodedBlockPatternChroma == 2;
+            if(state) transBlockN = &mbAddrN->re->chroma[1][iCbCr][index_N];
+
+            return transBlockN;
+        };
+        transBlockA = f(mbAddrA, index_A);
+        transBlockB = f(mbAddrB, index_B);
+    }
+    else if(blk == LUMA_8x8) // luma8x8BlkIdx
+    {
+
     }
     //后面的ctxBlockCat都没有写，因为从5开始都是用于444的
 
@@ -991,7 +1096,7 @@ uint8 cabac::read_coded_block_flag(int syntaxelement)
     };
     //calc ctxIdxInc
     uint8 ctxIdxInc;
-    ctxIdxInc = f_condTermFlagN(currentMB, mbAddrA, transBlockA) + 2 * f_condTermFlagN(currentMB, mbAddrB, transBlockB);
+    ctxIdxInc = f_condTermFlagN(current, mbAddrA, transBlockA) + 2 * f_condTermFlagN(current, mbAddrB, transBlockB);
 
     //get ctxIdxOffsetCat
     uint8 ctxIdxOffsetCat = ctxIdxBlockCatOffsetOfctxBlockCat[0][ctxBlockCat];
@@ -1050,7 +1155,7 @@ uint32 cabac::read_coeff_abs_level_minus1(int syntaxelement)
         else ctxIdxInc = 5 + Min(4 - ((ctxBlockCat == 3)?1 : 0), numDecodAbsLevelGt1);
 
         ctxIdx = ctxIdxInc + prefix_ctxIdxOffset + ctxIdxBlockCatOffsetOfctxBlockCat[3][ctxBlockCat];
-        result_cur = (uint8_t)DecodeValueUsingCtxIdx(ctxIdx, 0);
+        result_cur = decode_binary(ctxIdx);
         result_cur = result_cur << binIdx;
         result_str += result_cur;
     } while( ((prefix_result = IsIn_TU_binarization(result_str, 14, binIdx)) == -1) && (binIdx < 13) );
@@ -1100,48 +1205,46 @@ uint16 cabac::read_intra_chroma_pred_mod()
         else condTermFlagN = 1;
         return condTermFlagN;
     };
-    int binIdx = -1;
-    do
+    // cMax == 3  只有4种情况 0 10 110 111   ->
+
+    condTermFlagA = f(cur, A);
+    condTermFlagB = f(cur, B);
+    int ctxIdxOffset = 64;
+    ctxIdx =  condTermFlagA + condTermFlagB + ctxIdxOffset;
+    if(decode_binary(ctxIdx))
     {
-        binIdx++;// sumi
-        if(binIdx == 0)
+        ctxIdx = 3 + ctxIdxOffset;
+        if(decode_binary(ctxIdx))
         {
-            
-            condTermFlagA = f(cur, A);
-            condTermFlagB = f(cur, B);
-            ctxIdxInc = condTermFlagA + condTermFlagB;   
+            if(decode_binary(ctxIdx))
+                result = 3;
+            else 
+                result = 2;
         }
-        else ctxIdxInc = 3;
-        ctxIdx =  ctxIdxInc + 64;
-        result_cur = (uint8_t)DecodeValueUsingCtxIdx(ctxIdx, 0);
-        result_cur = result_cur << binIdx;
-        result_all += result_cur;
-    } while(IsIn_TU_binarization(result_all, 3, binIdx) == -1);
-    result = IsIn_TU_binarization(result_all, 3, binIdx);
+        else
+            result = 1;
+    }
+    else
+        result = 0;
     return result;
 }
 
 uint8 cabac::read_prev_intra4x4_pred_mode_flag()
 {
     //FL cMax = 1   offset = 68
-    uint16 ctxIdx_cur = 0 + 68;
-    uint8 result = (uint8_t)DecodeValueUsingCtxIdx(ctxIdx_cur, 0);
+    ctxIdx = 0 + 68;
+    uint8 result = decode_binary(ctxIdx);
     return result;
 }
 uint8 cabac::read_rem_intra4x4_pred_mode()
 {
     //FL cMax = 7   offset = 69
-    uint16 ctxIdx = 0 + 69;
+    ctxIdx = 0 + 69;
     uint8 result = 0;
-    uint8 result_cur = 0;
-    int binIdx = -1;
-    do
-    {
-        binIdx++;
-        result_cur = (uint8_t)DecodeValueUsingCtxIdx(ctxIdx, 0);
-        result_cur <<= binIdx;
-        result += result_cur;
-    } while (binIdx < 2);
+    result |= (decode_binary(ctxIdx) << 0);
+    result |= (decode_binary(ctxIdx) << 1);
+    result |= (decode_binary(ctxIdx) << 2);
+
     return result;
 }
 
@@ -1159,16 +1262,6 @@ uint8 cabac::read_mb_skip_flag()
     int condTermFlagA = cur->neighbour.A.avaiable ? (cur->neighbour.A.pointer->mb_skip_flag == 0) : 0;
     int condTermFlagB = cur->neighbour.B.avaiable ? (cur->neighbour.B.pointer->mb_skip_flag == 0) : 0;
 
-    // macroblock* A = pic->neighbour_macroblock(cur, 'A');
-    // macroblock* B = pic->neighbour_macroblock(cur, 'B');
-    // auto f = [](macroblock* cur,  macroblock* N)->uint8_t{
-    //     uint8 condTermFlagN = 0; 
-    //     if(!cur->is_avaiable(N) || N->mb_skip_flag == 1) 
-    //         condTermFlagN = 0;
-    //     else condTermFlagN = 1;
-    //     return condTermFlagN;
-    // };
-
     ctxIdx = condTermFlagA + condTermFlagB + ctxIdxOffset;
     result = decode_binary(ctxIdx);
 
@@ -1182,9 +1275,9 @@ uint8 cabac::read_mb_skip_flag()
 uint8 cabac::read_ref_idx(int syntaxelements)
 {
     //U offset 54    
-    uint16 result_cur = 0;
-    uint16 result_all = 0;
-    uint16 result = 0;
+    // uint16 result_cur = 0;
+    // uint16 result_all = 0;
+    int result = 0;
 
     uint8 temporalDirection = (syntaxelements) & 0x1;
     uint8 spatialDirection  = (syntaxelements >> 1) & 0x1;
@@ -1199,38 +1292,39 @@ uint8 cabac::read_ref_idx(int syntaxelements)
     macroblock* cur   = lifeTimeSlice->curMB;
     predmode_mb_part Pred_L = temporalDirection ? Pred_L1 : Pred_L0;
 
-    auto f = [p,mbPartIdx,Pred_L,spatialDirection, temporalDirection,MbaffFrameFlag](macroblock* cur, char direction)->uint8_t{
+    auto f = [p,mbPartIdx,Pred_L,spatialDirection, temporalDirection,MbaffFrameFlag](macroblock* cur, char direction)->uint8
+    {
         int tmp = 0;
         int mbPartIdxN = 0;
         uint8 fieldflag = 0;//if(MbaffFrameFlag && cur是帧宏块 && N 是场宏块)
-        macroblock* N = p->get_PartNeighbour(cur, direction, 0x010, mbPartIdx, 0, mbPartIdxN, tmp);
+        macroblock* N ;//= p->neig(cur, direction, 0x010, mbPartIdx, 0, mbPartIdxN, tmp);
         uint8 predModeEqualFlagN = 0;
         uint8 refIdxZeroFlagN = 0;
         if(N)
         {
             if(N->is_interpred())
             {
-                if(temporalDirection)refIdxZeroFlagN = (N->ref_idx_l1[mbPartIdxN] > fieldflag)?0:1;
-                else refIdxZeroFlagN = (N->ref_idx_l0[mbPartIdxN] > fieldflag)?0:1;
+                if(temporalDirection)refIdxZeroFlagN = (N->inter->ref_idx_l1[mbPartIdxN] > fieldflag)?0:1;
+                else refIdxZeroFlagN = (N->inter->ref_idx_l0[mbPartIdxN] > fieldflag)?0:1;
             }
             
             if(N->type == B_Direct_16x16 || N->type == B_Skip) predModeEqualFlagN = 0;
             else if(N->type == P_8x8 || N->type == B_8x8)
             {
-                predmode_mb_part partpremode = SubMbPartPredMode(N->sub_mb_type[mbPartIdxN]);
+                predmode_mb_part partpremode = SubMbPartPredMode(N->inter->sub[mbPartIdxN].type);
                 if(partpremode != Pred_L && partpremode != BiPred) predModeEqualFlagN = 0;
                 else predModeEqualFlagN = 1;
             }
             else
             {
-                predmode_mb_part partpremode = MbPartPredMode(N, N->type, mbPartIdxN);
+                predmode_mb_part partpremode = MbPartPredMode(N->type, mbPartIdxN);
                 if(partpremode != Pred_L && partpremode != BiPred) predModeEqualFlagN = 0;
                 else predModeEqualFlagN = 1;
             }
         }
         uint8 condTermFlagN = 0;
         if(!cur->is_avaiable(N) || \
-           (N->type == P_Skip && N->type == B_Skip) || \
+           N->mb_skip_flag || \
            N->is_intrapred() || \
            predModeEqualFlagN == 0 || \
            refIdxZeroFlagN == 1
@@ -1238,27 +1332,20 @@ uint8 cabac::read_ref_idx(int syntaxelements)
         else condTermFlagN = 1;
         return condTermFlagN;
     };
-    int binIdx = -1;
-    do
+
+    uint8 condTermFlagA = 0, condTermFlagB = 0;
+    condTermFlagA = f(cur, 'A');
+    condTermFlagB = f(cur, 'B');
+
+    ctxIdx = condTermFlagA + 2 * condTermFlagB + ctxIdxOffset;
+    if(decode_binary(ctxIdx))
     {
-        binIdx++;// sumi
-
-        if(binIdx == 0)
-        {
-            uint8 condTermFlagA = 0, condTermFlagB = 0;
-            condTermFlagA = f(cur, 'A');
-            condTermFlagB = f(cur, 'B');
-            ctxIdxInc = condTermFlagA + 2 * condTermFlagB;   
-        }
-        else if(binIdx == 1) ctxIdxInc = 4;
-        else ctxIdxInc = 5;
-
-        ctxIdx =  ctxIdxInc + ctxIdxOffset;
-        result_cur = (uint8_t)DecodeValueUsingCtxIdx(ctxIdx, 0);
-        result_cur = result_cur << binIdx;
-        result_all += result_cur;
-    } while(IsIn_U_binarization(result_all, binIdx) == -1);
-    result = IsIn_U_binarization(result_all, binIdx);
+        result++;
+        ctxIdx = 4 + ctxIdxOffset;
+        result += decode_unary(ctxIdx, 1);
+    }
+    else
+        result = 0;
     return result;
 }
 //子块索引1 + 子宏块子块索引1  + 句法2 + 方向1
@@ -1294,9 +1381,9 @@ int cabac::read_mvd_lx(int syntaxelements)
     auto f = [p,mbPartIdx,subMbPartIdx,Pred_L, temporalDirection, spatialDirection, MbaffFrameFlag](macroblock* cur,int mbPartIdxN, char direction)->uint16_t{
         int subMbPartIdxN = 0;
         uint8 fieldflag = 0;//if(MbaffFrameFlag && cur是帧宏块 && N 是场宏块)
-        macroblock* N = p->get_PartNeighbour(cur, direction, 0x010, mbPartIdx, subMbPartIdx, mbPartIdxN, subMbPartIdxN);
-        matrix* mvd_lX = NULL;
-        if(N) mvd_lX = temporalDirection ? N->mvd_l1 : N->mvd_l0; 
+        macroblock* N ;//= p->get_PartNeighbour(cur, direction, 0x010, mbPartIdx, subMbPartIdx, mbPartIdxN, subMbPartIdxN);
+        MotionVector** mvd_lX = NULL;
+        if(N) mvd_lX = temporalDirection ? N->inter->mv.mvd_l1 : N->inter->mv.mvd_l0; 
 
         uint8 predModeEqualFlagN = 0;
         if(N)
@@ -1304,13 +1391,13 @@ int cabac::read_mvd_lx(int syntaxelements)
             if(N->type == B_Direct_16x16 || N->type == B_Skip) predModeEqualFlagN = 0;
             else if(N->type == P_8x8 || N->type == B_8x8)
             {
-                predmode_mb_part subpremode = (MbPartPredMode)SubMbPartPredMode(N->sub_mb_type[mbPartIdxN]);
+                predmode_mb_part subpremode = SubMbPartPredMode(N->inter->sub[mbPartIdxN].type);
                 if(subpremode != Pred_L && subpremode != BiPred) predModeEqualFlagN = 0;
                 else predModeEqualFlagN = 1;
             }
             else
             {
-                predmode_mb_part partpremode = MbPartPredMode(N, N->type, mbPartIdxN);
+                predmode_mb_part partpremode = MbPartPredMode(N->type, mbPartIdxN);
                 if(partpremode != Pred_L && partpremode != BiPred)predModeEqualFlagN = 0;
                 else predModeEqualFlagN = 1;
             }
@@ -1337,7 +1424,7 @@ int cabac::read_mvd_lx(int syntaxelements)
         {
             uint16 absMvdCompA = f(cur,mbPartIdx, 'A');
             uint16 absMvdCompB = f(cur,mbPartIdx, 'B');
-            uint16 absMvdComp = absMvdCompA + absMvdCompB;   
+            uint16 absMvdComp = absMvdCompA + absMvdCompB;
             if(absMvdComp < 3) ctxIdxInc = 0;
             else if(absMvdComp > 32) ctxIdxInc = 2;
             else ctxIdxInc = 1;
@@ -1454,129 +1541,6 @@ int cabac::IsIn_UEGk_binarization(uint32 value, uint8 binIdx, uint8  signedValFl
     return prefix + suffix;
 }
 
-
-//binIdx maxBinIdxCtx ctxIdxOffset syntaxRequest
-uint16 cabac::DecodeCtxIdxUsingBinIdx(uint16 binIdx, uint16 maxBinIdxCtx, int ctxIdxOffset, int syntaxRequest)
-{
-    uint16 ctxIdx_result, ctxIdxInc;
-    uint8 condTermFlagA = 0;
-    uint8 condTermFlagB = 0;
-    macroblock* mb_cur = lifeTimeSlice->curMB;
-    macroblock* mb_neiA = pic->neighbour_macroblock(mb_cur, 'A');
-    macroblock* mb_neiB = pic->neighbour_macroblock(mb_cur, 'B');
-
-
-    if(ctxIdxOffset == 70)
-    { //upper
-        if(!mb_neiB || ((mb_neiB && mb_neiB->is_avaiable(mb_cur)) || mb_neiB->mb_skip_flag == 0 )) condTermFlagB = 0;
-        else
-        {
-            if(mb_neiB->mb_field_decoding_flag == 0) condTermFlagB = 0;
-            else condTermFlagB  = 1;
-        }
-        //left
-        if(!mb_neiA || ((mb_neiA && mb_neiA->is_avaiable(mb_cur)) || mb_neiA->mb_skip_flag == 0 )) condTermFlagA = 0;
-        else
-        {
-            if(mb_neiA->mb_field_decoding_flag == 0) condTermFlagA = 0;
-            else condTermFlagA  = 1;
-        }
-        ctxIdxInc = condTermFlagA + condTermFlagB;
-    }
-    //mb_type for i slice only
-    else if(ctxIdxOffset == 3)
-    {
-        if(binIdx == 0)
-        {
-            if(!mb_neiB || ( mb_neiB && mb_neiB->is_avaiable(mb_cur) ) ) condTermFlagB = 0;
-            else
-            {
-                if( (ctxIdxOffset == 0 && mb_neiB->type == SI_M) ||\
-                    (ctxIdxOffset == 3 && mb_neiB->type == I_NxN)||\
-                    (ctxIdxOffset == 27 && (mb_neiB->type == B_Skip|| mb_neiB->type == B_Direct_16x16))
-                ) condTermFlagB  = 0;
-                else condTermFlagB  = 1;
-            }
-            //left
-            if(!mb_neiA || ( mb_neiA && mb_neiA->is_avaiable(mb_cur) ) ) condTermFlagA = 0;
-            else
-            {
-                if( (ctxIdxOffset == 0 && mb_neiA->type == SI_M) ||\
-                    (ctxIdxOffset == 3 && mb_neiA->type == I_NxN)||\
-                    (ctxIdxOffset == 17 && (mb_neiA->type == B_Skip|| mb_neiA->type == B_Direct_16x16))
-                ) condTermFlagA  = 0;
-                else condTermFlagA  = 1;
-            }
-            ctxIdxInc = condTermFlagA + condTermFlagB;
-        }
-        else if(binIdx == 1) {return ctxIdx_result = 276;}
-        else if(binIdx == 2 || binIdx == 3) ctxIdxInc = binIdx + 1;
-        else if(binIdx == 4) ctxIdxInc = (b3 != 0) ? 5 : 6;
-        else if(binIdx == 5) ctxIdxInc = (b3 != 0) ? 6 : 7;
-        else ctxIdxInc = 7;
-    }
-    //coded_block_pattern------prefix(luma)
-    else if(binIdx >= 0 && binIdx <= 3 && ctxIdxOffset == 73)
-    {
-        ctxIdxInc = condTermFlagA + 2 * condTermFlagB + ((binIdx == 1) ? 4 : 0);
-    }
-    //coded_block_pattern------suffix(Chroma)
-
-    //mb_qp_delta
-    else if(ctxIdxOffset == 60)
-    {
-        if(binIdx == 0)
-        {
-            macroblock* currentMB = lifeTimeSlice->curMB;
-            macroblock*  prevMB = lifeTimeSlice->get_mbUsingIdInSlice(currentMB->idx_inslice - 1);
-            if((prevMB == NULL || (prevMB->type == P_Skip || prevMB->type == B_Skip)) ||\
-                prevMB->type == I_PCM||\
-            (prevMB->premode != Intra_16x16 && (prevMB->CodedBlockPatternChroma == 0 && prevMB->CodedBlockPatternLuma == 0)) ||\
-            prevMB->mb_qp_delta == 0
-            )  ctxIdxInc = 0;
-            else ctxIdxInc = 1;
-        }
-        else if(binIdx == 1) {ctxIdxInc = 2;}
-        else {ctxIdxInc = 3;}
-    }
-    //ref idx l0 and l1
-    else if(binIdx == 0 && ctxIdxOffset == 54)
-    {
-
-    }
-    //intra_chroma_pred_mode 
-    else if(ctxIdxOffset == 64)
-    {
-
-    }
-    //coded_block_flag 
-    //else if()
-    // transform_size_8x8_flag 
-    else if (ctxIdxOffset == 399)
-    {
-        if((mb_neiB == NULL || mb_neiB->is_avaiable(mb_cur))||\
-            mb_neiB->transform_size_8x8_flag == 0\
-          )condTermFlagB = 0;
-        else condTermFlagB = 1;
-        if((mb_neiA == NULL || mb_neiA->is_avaiable(mb_cur))||\
-           mb_neiA->transform_size_8x8_flag == 0\
-          )condTermFlagA = 0;
-        else condTermFlagA = 1;
-        ctxIdxInc = condTermFlagA + condTermFlagB;
-
-    }
-
-    ctxIdx_result = ctxIdxInc + ctxIdxOffset;
-    return ctxIdx_result;
-}
-
-
-
-
-
-
-
-
 bool cabac::slice_end()
 {
     delete ctxIdxOfInitVariables;
@@ -1592,7 +1556,7 @@ cabac::cabac(parser* parser)
     b3 = 0;
     b1 = 0;
     state = 0;
-    this->p = parser;
+    this->pa = parser;
 }
 cabac::~cabac()
 {

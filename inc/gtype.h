@@ -1,6 +1,6 @@
 #ifndef GTYPE_H__
 #define GTYPE_H__
-#include "stdio.h"
+
 
 // 这里用来定义全局使用的数据类型
 typedef char  int8;

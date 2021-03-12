@@ -12,7 +12,7 @@ private:
     class slice* lifeTimeSlice;
     array2d<uint8_t>* ctxIdxOfInitVariables;
     uint8 state;// 0 - sleep,   1 - active;
-    class parser* p;
+    class parser* pa;
     class picture* pic;
     uint16 codIRange;
     uint16 codIOffset;
@@ -24,10 +24,11 @@ private:
     uint8 decode_binary(uint16 ctx);
     uint8 decode_bypass();
     uint8 decode_finaly();
+    int decode_unary(uint16 ctx, int offset);
+    int decode_uegk();
 
     uint8 init_variable();
     uint8 init_engine();
-    uint16 DecodeCtxIdxUsingBinIdx(uint16 binIdx, uint16 maxBinIdxCtx, int ctxIdxOffset, int syntaxRequest);
     bool DecodeValueUsingCtxIdx(uint16 ctxIdx_value, uint8 bypassFlag_value);
     void RenormD();
 
@@ -53,8 +54,8 @@ private:
     uint32 read_coeff_abs_level_minus1(int);
 
     // 二值化的方法
-    // 基于查表的方法
-    bool Binarization_mbtype_submbtype(uint16 &maxBinIdxCtx, int &ctxIdxOffset, uint8 &bypassFlag);
+    // 基于查表的方法 - 不需要了
+    // bool Binarization_mbtype_submbtype(uint16 &maxBinIdxCtx, int &ctxIdxOffset, uint8 &bypassFlag);
     // 一元二值化
     int IsIn_U_binarization(uint64 value, uint8 length);    //if is, return value, if not, return -1
     // 截断一元二值化

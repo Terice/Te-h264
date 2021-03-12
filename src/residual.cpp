@@ -52,104 +52,102 @@ void residual::ParseHead()
         // 1个DC， 15个AC
         
         // new 两个指针出来，一个放DC，一个放AC
-        luma = new block*[2];
+        luma[0].append(16);
         //parse luma
         // DC DC 系数只有 16 个，之后填到 16x15 个AC系数的开头
-        luma[1] = new block(16);
+        // luma[1].insert(16, 15);
         (this->*residual_block)(
-            luma[1],\
+            &luma[0],\
             0x00000030U,\
             0, 15, 16); // 所以这里是 16 个
         // AC
-        luma[0] = new block();
-        luma[0]->add_childBlock(4);//分4组
+        // AC 系数和 Intra_4x4 一样的解码方法
+        luma[1].insert(4); // 
         for(uint8 i8x8 = 0; i8x8 < 4; i8x8++)
         {
-            luma[0]->get_childBlock(i8x8)->add_childBlock(4, 15);//再分4组，每组数据长度15
+            luma[1][i8x8].insert(4, 15);//再分4组，每组数据长度15
             for(uint8 i4x4 = 0; i4x4 < 4; i4x4++)
             {
                 if(codedPatternLuma & (1 << i8x8)) // 如果这个区块编码的话，那么会有对应的读取
                     (this->*residual_block)(\
-                        luma[0]->get_childBlock(i8x8)->get_childBlock(i4x4),\
+                        &luma[1][i8x8][i4x4],\
                         0x00000130U | (i8x8 * 4 + i4x4),\
                         0,14,15);// 而这里就只有15个
                 else  // 不编码就全部都是 0 ， 后面类似于这个的句式语义相同
                     for(uint8_t i = 0; i < 15; i++)
-                        luma[0]->get_childBlock(i8x8)->get_childBlock(i4x4)->set_blockValue(i, 0);
+                        luma[1][i8x8][i4x4].set(i, 0);
             }
         }
     }
     else if(mb->predmode == Intra_8x8)
     {
         // 8x8 是分成四块，每一个直接解 64 个系数
-        luma = new block*[1];
-        luma[0] = new block();luma[0]->add_childBlock(16, 16);
+        luma = new block[1];
+        luma[0].insert(4, 64);
+        
         for(uint8_t i8x8 = 0; i8x8 < 4; i8x8++)
             if(codedPatternLuma & (1 << i8x8))
                 (this->*residual_block)(\
-                    luma[0]->get_childBlock(i8x8),\
+                    &luma[0][i8x8],\
                     0x00000530U | (uint32)i8x8,\
                     0, 63, 64);
             else 
                 for(uint8_t i = 0; i < 64; i++) 
-                    luma[0]->get_childBlock(i8x8)->set_blockValue(i, 0);
+                    luma[0][i8x8].set(i, 0);
     }
     else // 对于 intra4x4 和 需要残差的帧间 用的是同一种方法
     {
         //一次解完所有的256个变换系数
         // 注意是分成4组，每组再分成4组，按照每小组 16 个系数来解码的
-        luma = new block*[1];
-        luma[0] = new block();
-        luma[0]->add_childBlock(4);
+        luma = new block[1];
+        luma[0].insert(4);
         for(uint8_t i8x8 = 0; i8x8 < 4; i8x8++)
         {
-            luma[0]->get_childBlock(i8x8)->add_childBlock(4, 16);
+            luma[0][i8x8].insert(4, 16);
             for(uint8_t i4x4 = 0; i4x4 < 4; i4x4++) 
             {
                 if(codedPatternLuma & (1 << i8x8))\
                     (this->*residual_block)(\
-                        luma[0]->get_childBlock(i8x8)->get_childBlock(i4x4),\
+                        &luma[0][i8x8][i4x4],\
                         0x00000230U | (uint32)(i8x8 * 4 + i4x4),\
                         0, 15, 16);
                 else 
                     for(uint8_t i = 0; i < 16; i++) 
-                        luma[0]->get_childBlock(i8x8)->get_childBlock(i4x4)->set_blockValue(i, 0);
+                        luma[0][i8x8][i4x4].set(i, 0);
             }
         }
     }
     //parser chroma
     //0 - DC 1 - AC
-    chroma = new block*[2];
-    chroma[0] = new block();   //DC
-    chroma[1] = new block();
+    chroma = new block[2];
     if(pa->pV->ChromaArrayType == 1 || pa->pV->ChromaArrayType == 2)
     {
         uint8_t iCbCr = 0;
         uint8_t NumC8x8 = 4 / (pa->pV->SubWidthC * pa->pV->SubHeightC);
-
-        chroma[0]->add_childBlock(2, 4);
+        // 实际上 NumC8x8 = 4;
+        chroma[0].insert(2, 4);
         for(iCbCr = 0; iCbCr < 2; iCbCr++) // read chroma DC level
             if(codedPatternchroma & 3) 
-                (this->*residual_block)(chroma[0]->get_childBlock(iCbCr),\
+                (this->*residual_block)(&chroma[0][iCbCr],\
                 0x00000300U | ((uint32)iCbCr << 4),\
                 0, 4 * NumC8x8 - 1, 4 * NumC8x8);
             else 
                 for(uint8_t i = 0; i < 4 * NumC8x8; i++) 
-                    chroma[0]->get_childBlock(iCbCr)->set_blockValue(i, 0);
-        chroma[1]->add_childBlock(2);
+                    chroma[0][iCbCr].set(i, 0);
+        chroma[1].insert(2);
         for(iCbCr = 0; iCbCr < 2; iCbCr++) // read chroma AC level
         {
             for(uint8_t i8x8 = 0; i8x8 < NumC8x8; i8x8++)
             {
-                chroma[1]->get_childBlock(iCbCr)->add_childBlock(4, 15);
+                chroma[1][iCbCr].insert(NumC8x8, 15);
                 for(uint8_t i4x4 = 0; i4x4 < 4; i4x4++)
                     if(codedPatternchroma & 2)\
-                        (this->*residual_block)(chroma[1]->get_childBlock(iCbCr)->get_childBlock(i4x4),\
+                        (this->*residual_block)(&chroma[1][iCbCr][i4x4],\
                         0x00000400U | ((uint32)iCbCr << 4) | (uint32)(i8x8 * 4 + i4x4),\
                         0, 14, 15);
                     else 
                         for(uint8_t i = 0; i < 15; i++) 
-                            chroma[1]->get_childBlock(iCbCr)->get_childBlock(i4x4)->set_blockValue(i, 0);
+                            chroma[1][iCbCr][i4x4].set(i, 0);
             }
         }
     }
@@ -176,9 +174,11 @@ void residual::DecodeData()
 void residual::residual_block_cabac(block* bl, uint32 requestVlaue, uint8 startIdx, uint8 endIdx, uint8 length)
 {
     int16 i = 0, numCoeff = 0;
-    int32 coeffLevel                  [length];
-    uint8 significant_coeff_flag      [length];
-    uint8 last_significant_coeff_flag [length];
+    int *coeffLevel                   = new int[length];
+    int *significant_coeff_flag       = new int[length];
+    int *last_significant_coeff_flag  = new int[length];
+    int *coeff_abs_level_minus1       = new int[length];
+    int *coeff_sign_flag              = new int[length];
     uint32 a= 0 ,b = 0;
 
     if(length != 64 || pa->pV->ChromaArrayType == 3) 
@@ -188,8 +188,6 @@ void residual::residual_block_cabac(block* bl, uint32 requestVlaue, uint8 startI
         coeffLevel[i] = 0;
     if(bl->coded_block_flag)
     {
-        int32 coeff_abs_level_minus1  [length];
-        int32 coeff_sign_flag         [length];
         numCoeff = endIdx + 1 ;
         i = startIdx ;
         while(i < numCoeff - 1) 
@@ -219,7 +217,8 @@ void residual::residual_block_cabac(block* bl, uint32 requestVlaue, uint8 startI
             }
         }
     }
-    for (uint16 i = 0; i < length; i++) {bl->set_blockValue(i, coeffLevel[i]);}
+    // for (uint16 i = 0; i < length; i++) {bl->set_blockValue(i, coeffLevel[i]);}
+    memcpy(bl->value, coeffLevel, length * sizeof(int));
 
     if(terr.cabac_result_residual())
     {
@@ -227,6 +226,11 @@ void residual::residual_block_cabac(block* bl, uint32 requestVlaue, uint8 startI
         for (uint16 i = 0; i < length; i++) 
         {printf(" index %2d, value : %d\n", i, coeffLevel[i]);}
     }
+    delete[] coeffLevel                   ;
+    delete[] significant_coeff_flag       ;
+    delete[] last_significant_coeff_flag  ;
+    delete[] coeff_abs_level_minus1       ;
+    delete[] coeff_sign_flag              ;
 }
 
 
@@ -359,7 +363,7 @@ void residual::Decode_Intra4x4()
         {
             // c 的值的取值范围： -2^(7 + bitDepth), 2^(7 + bitDepth) -1
             // Inverse4x4Scan(luma[0]->get_childBlock(i8x8)->get_childBlock(i4x4)->value, c);
-            c.from(luma[0]->get_childBlock(i8x8)->get_childBlock(i4x4)->value, 16);
+            c.from(luma[0][i8x8][i4x4].value, 16);
             c.inverse4x4();
             ScalingAndTransform_Residual4x4Blocks(pa->pV->BitDepthY, qP, c);
             
@@ -390,7 +394,7 @@ void residual::Decode_Intra16x16()
     int qP = mb->qp.QPY_;
 
     matrix c(4, 4, 0);
-    Inverse4x4Scan(luma[1]->value, c);
+    Inverse4x4Scan(luma[1].value, c);
     //Intra_16x16 DC transform and scaling
     // c  = (*decoder->matrix_4x4Trans * c  * *decoder->matrix_4x4Trans);
     // matrix tmp(4,4,0);
@@ -434,7 +438,7 @@ void residual::Decode_Intra16x16()
         //write AC into residual
 
         //提前进行了一次预处理得到luma的block(AC系数所在的block)
-        block* bl = luma[0]->get_childBlock(block4x4Index[i]/4)->get_childBlock(block4x4Index[i]%4);
+        block* bl = &(luma[0][block4x4Index[i]/4][block4x4Index[i]%4]);
         //填入AC系数的时候，AC系数不是按扫描顺序填入DC之后的位置的。而是按照4x4逆扫描。
         //也就是说：读取AC的值的时候按逆扫描来，填入的时候按照光栅扫描填入就行了
         
@@ -525,44 +529,45 @@ void residual::Decode_Zero()
     //块置零
     //数据置零
 
-    if(mb->is_intrapred())
-    {
-        if(mb->predmode == Intra_16x16)
-        {
-            luma = new block*[2];
-            luma[1] = new block(16);
-            luma[0] = new block();
-            luma[0]->add_childBlock(4);
-            for (uint8_t i = 0; i < 4; i++){luma[0]->get_childBlock(i)->add_childBlock(4, 0);}
+    // if(mb->is_intrapred())
+    // {
+    //     if(mb->predmode == Intra_16x16)
+    //     {
+    //         luma = new block[2];
+    //         // luma[1] = new block(16);
+    //         luma[0].append(16);
+    //         // luma[0] = new block();
+    //         luma[0].insert(4);
+    //         for (uint8_t i = 0; i < 4; i++){luma[0]->get_childBlock(i)->add_childBlock(4, 0);}
 
-        }
-        else if(mb->predmode == Intra_4x4)
-        {
-            luma = new block*[1];
-            luma[0] = new block();
-            luma[0]->add_childBlock(4);
-            for (uint8_t i = 0; i < 4; i++){luma[0]->get_childBlock(i)->add_childBlock(4, 0);}
-        }
-        else {
-            int a = 0;/*这里是8x8块8*/
-        }
-    }
-    else
-    {
-        luma = new block*[1];
-        luma[0] = new block();
-        luma[0]->add_childBlock(4);
-        for (uint8_t i = 0; i < 4; i++){luma[0]->get_childBlock(i)->add_childBlock(4, 0);}
-    }
+    //     }
+    //     else if(mb->predmode == Intra_4x4)
+    //     {
+    //         luma = new block*[1];
+    //         luma[0] = new block();
+    //         luma[0]->add_childBlock(4);
+    //         for (uint8_t i = 0; i < 4; i++){luma[0]->get_childBlock(i)->add_childBlock(4, 0);}
+    //     }
+    //     else {
+    //         int a = 0;/*这里是8x8块8*/
+    //     }
+    // }
+    // else
+    // {
+    //     luma = new block*[1];
+    //     luma[0] = new block();
+    //     luma[0]->add_childBlock(4);
+    //     for (uint8_t i = 0; i < 4; i++){luma[0]->get_childBlock(i)->add_childBlock(4, 0);}
+    // }
     
 
-    //亮度的块置零
-    chroma = new block*[2];
-    chroma[0] = new block();
-    chroma[0]->add_childBlock(2, 4);
-    chroma[1] = new block();
-    chroma[1]->add_childBlock(2);
-    for(uint8_t iCbCr = 0; iCbCr < 2; iCbCr++){chroma[1]->add_childBlock(4,0);}
+    // //亮度的块置零
+    // chroma = new block*[2];
+    // chroma[0] = new block();
+    // chroma[0]->add_childBlock(2, 4);
+    // chroma[1] = new block();
+    // chroma[1]->add_childBlock(2);
+    // for(uint8_t iCbCr = 0; iCbCr < 2; iCbCr++){chroma[1]->add_childBlock(4,0);}
 
     //样点残差块置零
     // residual_Y = new matrix(16,16,0);

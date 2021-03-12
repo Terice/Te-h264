@@ -65,7 +65,7 @@ typedef struct Qp_info__
     int8  QPC_;
 }Qp_info;
 
-typedef point MotionVector;
+typedef int MotionVector[2];
 typedef struct MotionVector_info__
 {
     // 第一个[]是子块的索引，num_MBpart
@@ -114,10 +114,14 @@ typedef struct Inter_pred__
 class macroblock;
 typedef struct MacroBlockNeighInfo__
 {
-    // 这个info所指向的macroblock
-    macroblock *pointer;
     // 对于当前 macroblock ，m 能不能用
     bool avaiable;
+    // 这个info所指向的macroblock
+    macroblock *pointer;
+
+    bool predsame;
+    bool Skip;
+    bool IPCM;
 }MacroBlockNeighInfo;
 
 /*

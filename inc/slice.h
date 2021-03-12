@@ -129,6 +129,8 @@ public:
     int slice_type;
     type_slice type;
     int index;
+
+    int last_mb_qp_delta;
     
     macroblock* curMB;
     macroblock* hedMB;

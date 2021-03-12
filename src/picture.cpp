@@ -95,7 +95,8 @@ void picture::takein(macroblock *m)
     detect(m, &m->neighbour.D, curpos_x, curpos_y, -1,-1, this);
     
 }
-void picture::neighbour_4x4block(macroblock *current, int index_current, char direction, macroblock **target, int *index_target, int *x = NULL, int * y = NULL)
+
+void picture::neighbour_4x4block(macroblock *current, int index_current, char direction,int *index_target,  macroblock **target)
 // void picture::neighbour_4x4block(macroblock* mb_current, char direction,int index_current, uint32 mode,  int *indexResult, int *r, int *c)
 {
     /*宏块的坐标轴
@@ -154,21 +155,21 @@ void picture::neighbour_4x4block(macroblock *current, int index_current, char di
     {
         *index_target = -1;
         *target =  R;
-        if(!y && !x)
-        {
-            *y = -1;
-            *x = -1;
-        }
+        // if(!y && !x)
+        // {
+        //     *y = -1;
+        //     *x = -1;
+        // }
     }
     else
     {
         xP = xW;
         yP = yW;
-        if(!y && !x)
-        {
-            *y = yP;
-            *x = xP;
-        }
+        // if(!y && !x)
+        // {
+        //     *y = yP;
+        //     *x = xP;
+        // }
         *index_target = indexBlockSideHeight * (yP / sampleBlockSideHeight) + (xP / sampleBlockSideWidth);
         //如果是luma4x4块，那么换到4x4索引
         *index_target = block4x4Index[*index_target];

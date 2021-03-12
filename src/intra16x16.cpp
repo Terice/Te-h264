@@ -24,7 +24,7 @@ void Prediction_Intra16x16_V(macroblock *current, parser* pa)
     // 复制
     for (int i = 0; i < 16; i++)
     {
-        memcpy((*current->pred)[i], data, 16 * sizeof(int));
+        memcpy(current->pred[0][i], data, 16 * sizeof(int));
     }
     
 }
@@ -75,7 +75,7 @@ void Prediction_Intra16x16_DC(macroblock *current, parser* pa)
         data_in = (int)(1 << (pa->pV->BitDepthY - 1));
     //
 
-    (*current->pred) = data_in;
+    current->pred[0] = data_in;
 }
 void Prediction_Intra16x16_Plane(macroblock *current, parser* pa)
 {
@@ -127,7 +127,7 @@ void Prediction_Intra16x16_Plane(macroblock *current, parser* pa)
     }
     for (int i = 0; i < 16; i++)
     {
-        memcpy((*current->pred)[i], data_in, 16 * sizeof(int));
+        memcpy(current->pred[0][i], data_in[i], 16 * sizeof(int));
     }
     
 }

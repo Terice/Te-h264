@@ -12,17 +12,22 @@ private:
 public:
     int32* value;
     uint8 coded_block_flag;
-    //添加count个长度为init_length的block作为当前block的子block
-    bool add_childBlock(unsigned int count, int init_length);
-    //添加count个空block作为当前block的子block
-    bool add_childBlock(unsigned int count);
-    //得到第index个block的索引
-    block* get_childBlock(int index);
-    //设置索引为i处的值为value
-    bool set_blockValue(int i, int value);
 
-    //return block*   not value
+    //return child block   not value
+    // 得到子box
     block& operator[](int i);
+
+    // 增加数据长度到length
+    bool append(int length);
+
+    // 添加 length 个box
+    bool insert(int length);
+    // 添加 length 个box， 每个 box 带长度数据
+    bool insert(int length, int data_length);
+    // 得到 i 处的值
+    int get(int i);
+    // 设置 i 处的值
+    bool set(int i, int v);
 
     block(int init_length);
     block();

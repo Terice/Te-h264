@@ -32,6 +32,7 @@ slice::slice(parser* p, decoder* d, picture* pic)
     ps->sps = (pa->pS->sps);
     index = pa->index_cur_slice;
     curNAL = pa->cur_nal;
+    last_mb_qp_delta = 0;
 }
 slice::~slice()
 {
@@ -424,20 +425,7 @@ void slice::ParseSliceData()
                 ps->mb_field_decoding_flag = pa->read_ae(0x00012000U);//1a
             else ps->mb_field_decoding_flag = ps->field_pic_flag;
         }
-        //     //解析宏块数据
-        //     // parser->debug->de_DltTime("mb start");
-        //     mb->Parse(0);
-        //     // parser->debug->de_DltTime("mb parser");
-        //     //所有的宏块都需要解码、重建图像
-        //     mb->Calc(0);
-        //     // parser->debug->de_DltTime("mb dataer");
-        // }
-        // else
-        // {
-        //     //Skip宏块用下面的初始化函数保持宏块的结构
-        //     mb->Init0(0);
-        //     mb->Calc(0);
-        // }
+        
         //
 
         
