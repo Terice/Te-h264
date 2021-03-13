@@ -8,10 +8,11 @@ class nal;
 class SPS;
 class PPS;
 class slice;
-class matrix;
+class picture;
+#include "matrix.h"
 
 // 解码参数
-typedef struct PARAMETERSV
+typedef struct ParametersV__
 {
     uint32 ChromaArrayType           ;
     uint32 MaxFrameNum               ;
@@ -40,7 +41,7 @@ typedef struct PARAMETERSV
     uint8 SubHeightC              = 1;
 }ParametersV;
 // 序列参数集、 图像参数集
-typedef struct PARAMETESS
+typedef struct ParametersS__
 {
     SPS* sps;
     PPS* pps;
@@ -51,7 +52,7 @@ class parser
 {
 private:
     // reader 用来读取不需要上下文的句法元素
-    reader* r;
+    reader* bitstream;
     // cabac 用来读取ae算子的据发元素，
     // 因为其需要用到上下文和解码环境
     cabac* cabac_core;
@@ -79,32 +80,32 @@ public:
     // 寻找下一个nal
     bool find_nextNAL();
 
-    // 判断缓冲区是否字节对齐
-    bool algi();
+    // // 判断缓冲区是否字节对齐
+    // bool  algi();
     // 读入一个bit
-    bool read_bi();
+    bool  read_bi();
     //从当前缓冲区中读入一个char，会强制对齐
     short read_ch();
     // 强制对齐
-    bool read_al();
+    bool  read_al();
 
     //uint64 next(uint32 size);
 
     // 读入size个bit，解释为无符号数
     // 目前空定义
-    uint64 read_un(uint8 size);
+    uint64 read_un(int size);
     // 读入size个bit，解释为有符号数
     // 目前空定义
-    int64  read_sn(uint8 size);
+    int64  read_sn(int size);
 
     // 无符号golomb
     uint64 read_ue();
     // 有符号golomb
     int64  read_se();
     // 映射指数
-    uint64 read_me(uint32 mb_type);
+    uint64 read_me(int mb_type);
     // 截断指数
-    uint64 read_te(uint32 range);
+    uint64 read_te(int range);
     // CAVLC
     // 空定义
     uint64 read_ce();
@@ -116,11 +117,11 @@ public:
     uint16 read_12();
 
 
-    void set_cabac_slice_new();
+    void set_cabac_slice_new(picture* pic, slice *sl);
     void set_cabac_slice_end();
 
-    matrix *matrix_4x4Trans;
-    matrix *matrix_2x2Trans;
+    matrix* matrix_4x4Trans;
+    matrix* matrix_2x2Trans;
 };
 
 

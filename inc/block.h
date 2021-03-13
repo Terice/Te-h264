@@ -6,7 +6,7 @@
 class block
 {
 private:
-    block** childBlock;
+    block* childBlock;
     int length;
     int childBlockLength;
 public:

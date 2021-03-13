@@ -12,6 +12,14 @@ static unsigned long int datapkg_cout = 0;
 // 采用的是类似于文件硬链接的方式来处理数据包
 // 从而来解决内存泄漏的问题
 
+void matrix::from(int *data, int length)
+{
+    memcpy(this->data, data, length * sizeof(int));
+}
+void matrix::from(int *data, int start, int length)
+{
+    memcpy(this->data + start, data, length * sizeof(int));
+}
 static void decrease(DataPkg* pkg)
 {
     if(!pkg) return;
@@ -127,6 +135,15 @@ matrix::~matrix()
 
 
 
+    
+void matrix::operator=(int value)
+{
+    for (int i = 0; i < data->length; i++)
+    {
+        data->pointer[i] = value;
+    }
+    
+}
 int* matrix::operator[](int i) const
 {
     return i >= h ? NULL : data->pointer + i * w;
@@ -137,13 +154,23 @@ matrix matrix::operator<<(int right)
     if(right < 0) return (*this);
     matrix result(w, h, 0);
 
-    for (size_t i = 0; i < w; i++)
+    for (int i = 0; i < data->length; i++)
     {
-        for (size_t j = 0; j < h; j++)
-        {
-            result[i][j] = (*this)[i][j] << right;
-        }
+        result.data->pointer[i] = this->data->pointer[i] >> right;
     }
+    
+    return result;
+}
+matrix matrix::operator>>(int right)
+{
+    if(right < 0) return (*this);
+    matrix result(w, h, 0);
+
+    for (int i = 0; i < data->length; i++)
+    {
+        result.data->pointer[i] = this->data->pointer[i] >> right;
+    }
+    
     return result;
 }
 void matrix::operator=(const matrix& r)
@@ -156,7 +183,15 @@ void matrix::operator=(const matrix& r)
 
     this->data = r.data;
     increase(data);
-    
+}
+matrix matrix::operator+(int right)
+{
+    matrix result(this->w, this->h, 0);
+    for (int i = 0; i < data->length; i++)
+    {
+        result.data->pointer[i] = this->data->pointer[i] + right;
+    }
+    return result;
 }
 matrix matrix::operator+(const matrix& r)
 {
@@ -171,7 +206,15 @@ matrix matrix::operator+(const matrix& r)
         for (uint j = 0; j < this->h; j++)
         {result[i][j] = (*this)[i][j] + r[i][j];}
     }
-
+    return result;
+}
+matrix matrix::operator*(int right)
+{
+    matrix result(this->w, this->h, 0);
+    for (int i = 0; i < data->length; i++)
+    {
+        result.data->pointer[i] = this->data->pointer[i] * right;
+    }
     return result;
 }
 matrix matrix::operator*(const matrix& right)
@@ -199,4 +242,22 @@ matrix matrix::operator*(const matrix& right)
     }
 
     return result;
+}
+
+
+
+int  matrix::get(int i)
+{
+    return data->pointer[i];
+    return true;
+}
+bool matrix::set(int index, int value)
+{
+    data->pointer[index] = value;
+    return true;
+}
+bool matrix::set(int x, int y, int i)
+{
+    (*this)[x][y] = i;
+    return true;
 }

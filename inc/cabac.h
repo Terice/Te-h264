@@ -10,7 +10,7 @@ private:
 
     uint8 b3, b1;
     class slice* lifeTimeSlice;
-    array2d<uint8_t>* ctxIdxOfInitVariables;
+    uint8 ctxIdxOfInitVariables[1024][2];
     uint8 state;// 0 - sleep,   1 - active;
     class parser* pa;
     class picture* pic;
@@ -21,11 +21,17 @@ private:
     uint16 ctxIdxInc;
     uint16 ctxIdxOffset;
 
-    uint8 decode_binary(uint16 ctx);
-    uint8 decode_bypass();
-    uint8 decode_finaly();
+    // 下面的三个方法只可能解码出来两种状态
+    // 所以用了 bool
+
+    bool decode_binary(uint16 ctx);
+    bool decode_bypass();
+    bool decode_finaly();
     int decode_unary(uint16 ctx, int offset);
-    int decode_uegk();
+    // UEGK 都是采用旁路解码
+    // 这个函数不包括符号位和前缀的TU串
+    int decode_uegk(int k);
+    int decode_trunc();
 
     uint8 init_variable();
     uint8 init_engine();
@@ -53,28 +59,17 @@ private:
     uint8  read_coeff_sign_flag(int);
     uint32 read_coeff_abs_level_minus1(int);
 
-    // 二值化的方法
-    // 基于查表的方法 - 不需要了
-    // bool Binarization_mbtype_submbtype(uint16 &maxBinIdxCtx, int &ctxIdxOffset, uint8 &bypassFlag);
-    // 一元二值化
-    int IsIn_U_binarization(uint64 value, uint8 length);    //if is, return value, if not, return -1
-    // 截断一元二值化
-    int IsIn_TU_binarization(uint32 value, uint8 cMax, uint8 length);//if is, return value, if not, return -1
-    // k阶指数哥伦布二值化
-    //判断是不是在UEGk二值串中，如果是，返回这个二值串的值，否则返回-1
-    //五个参数分别是：当前的值，当前的长度，signedValFlag uCoeff k由句法表得到
-    int IsIn_UEGk_binarization(uint32 value, uint8 length, uint8  signedValFlag, uint8 uCoeff, uint8 k);
-
     uint16 pStateIdx;
     uint16 valMPS   ;
     uint32 Decode(uint32);
 public:
     uint8 get_state(){return state;};
     int   cread_ae(uint32);
+    bool  slice_new(picture *pic, slice *sl);
     bool  slice_end();
     bool  set_pic  (picture* p);
     bool  set_slice(slice* sl);
-    cabac(parser* parser);
+    cabac(parser* p);
     ~cabac();
 };
 

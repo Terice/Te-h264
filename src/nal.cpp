@@ -8,6 +8,7 @@
 #include "pps.h"
 #include "sps.h"
 #include "picture.h"
+#include "sei.h"
 
 nal::nal(parser* p, decoder* d)
 {
@@ -33,12 +34,11 @@ bool nal::decode()
         case NAL_TYPE_IDR   :decode_IDR();break;
         case NAL_TYPE_PPS   :decode_PPS();break;
         case NAL_TYPE_SPS   :decode_SPS();break;
+        case NAL_TYPE_SEI   :decode_SEI();break;
         default:std::cout << ">> nal: no fn to deocde type: [" << nal_unit_type << "]" << std::endl;
     }
     return true;
 }
-
-
 void nal::decode_SPS()
 {
     SPS *s = new SPS(pa);
@@ -106,14 +106,20 @@ void nal::decode_IDR()
     // 然后和普通的图像解码方式是一样的
     picture* pic = new picture(pa, de);
     this->data = pic;
-
     // 不过多一步设置IDR标志
     pic->IdrPicFlag = true;
+
+    pic->deocde();
 
     pic->refidc(nal_ref_idc);
 }
 
 void nal::decode_SEI()
 {
-    
+    sei* se = new sei(pa);
+
+    se->decode();
+
+    // this->data = se;
+    delete se;
 }

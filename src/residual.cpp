@@ -3,6 +3,10 @@
 #include "gvars.h"
 #include "gchart.h"
 
+#include <math.h>
+#include <string.h>
+
+
 #include "terror.h"
 #include "block.h"
 #include "macroblock.h"
@@ -10,8 +14,6 @@
 #include "pps.h"
 #include "matrix.h"
 #include "pixmap.h"
-#include <math.h>
-#include <string.h>
 
 residual::residual(macroblock *m, parser* p)
 {
@@ -315,8 +317,8 @@ matrix& residual::ScalingAndTransform_Residual4x4Blocks(int BitDepth, int qP, ma
     matrix r(4,4);
     //r = ((h + 32) >> 6);
     r = h;//h的结果直接交给r并在r上运算
-    r += 32;
-    r >>= 6;
+    r = (r + 32);
+    r = (r >> 6);
     
     c = r;
     return c;

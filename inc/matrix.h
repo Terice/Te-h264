@@ -48,16 +48,6 @@ public:
 
     
     
-    
-    //带等号的运算符都直接在源对象上面直接赋值
-    matrix operator+=(const matrix&);
-    matrix operator+=(int);
-    matrix operator*=(int);
-    matrix operator*=(matrix& right);
-    matrix operator/=(int);
-    matrix operator>>=(int);
-    matrix operator<<=(int);
-
     friend std::ostream&  operator<<(std::ostream& out ,const matrix& ma);
     // bool Set_r(int row, int value);
     // int Sum_r(int row);
@@ -70,10 +60,15 @@ public:
 
     // 数组自己进行inverse4x4变换
     void inverse4x4();
-    // 
+
+    // 从 data 中复制 length 个数据到自己的空间中
     void from(int *data, int length);
-    // 
+    // 从 data 中复制 length 个数据到自己的空间中，但是从 start 开始
     void from(int *data, int start, int length);
+
+    // 格式化这个数组
+    // 返回的值是格式化是否成功
+    // bool format(int w, int h);
 
     matrix(int width, int height, int value);
     matrix(int width, int height, int* res);

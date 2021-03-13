@@ -350,10 +350,10 @@ void slice::ParseSliceData()
     // 但是这里 已经知道了 entropy_coding_mode_flag 这个句法元素
     // 而且目前处理的都是ae算子，马上就会要用到，所以写在这里
     // cabac_init_idc 在头部中就已经读取到了，所以不用担心
-    pa->set_cabac_slice_new();
+    pa->set_cabac_slice_new(pic, this);
 
     //片数据对齐
-    if(ps->pps->entropy_coding_mode_flag) while(!pa->algi()){pa->read_bi();}
+    if(ps->pps->entropy_coding_mode_flag) pa->read_al();
 
     do{
 
@@ -566,4 +566,5 @@ static bool free_pw(PredWeight* pw, int num_ref_idx_l0_active_minus1, int num_re
         }
         delete pw;
     };
+    return true;
 }

@@ -1,4 +1,5 @@
 #include "macroblock.h"
+
 #include "gvars.h"
 #include "gchart.h"
 #include "gfunc.h"
@@ -7,8 +8,8 @@
 #include "slice.h"
 #include "parser.h"
 #include "decoder.h"
-#include "pixmap.h"
 #include "picture.h"
+#include "pixmap.h"
 #include "sps.h"
 #include "pps.h"
 #include "prediction.h"
@@ -44,8 +45,18 @@ macroblock::~macroblock()
     delete pred;
     delete resi;
     delete cons;
-
-
+    delete re;
+    if(intea_mode)
+    {
+        if(predmode == Intra_4x4) delete intra->predinfo.intra4x4;
+        else if(predmode == Intra_8x8) delete intra->predinfo.intra8x8; 
+    }
+    else
+    {
+        FreeMotionVectorPkg(&inter->mv, num_mb_part,inter->sub);
+        if(inter->sub && num_mb_part == 4) delete[] inter->sub;
+        delete inter;
+    }
 }
 void macroblock::attach(picture* p)
 {
@@ -266,7 +277,6 @@ void macroblock::Parse_Intra()
             if(!prev_intra4x4_pred_mode_flag[luma4x4BlkIdx]) 
                 rem_intra4x4_pred_mode[luma4x4BlkIdx] = pa->read_ae(0x00032000U);
         }
-
     }
     // 8x8 每块的预测模式的初始推导变量
     if(predmode == Intra_8x8)
@@ -312,6 +322,7 @@ void macroblock::Parse_Inter()
 {
 
     inter = new Inter_pred;
+    inter->sub = NULL;
 
     int8 *ref_idx_l0 = inter->ref_idx_l0;
     int8 *ref_idx_l1 = inter->ref_idx_l1;
@@ -422,10 +433,16 @@ void macroblock::ParseHead()
     if(mb_skip_flag)  // Skip宏块的模式推导（本来就是需要推导的）
     {
         if(sl->type == B) 
+        {
             type = B_Skip;
+            predmode = Direct;
+        }
         else /*if(sl->type == P)*/ 
+        {
             type = P_Skip;
-               // 注意 Skip 宏块是没有残差的（全部都是0）
+            predmode = Pred_L0;
+        }
+        // 注意 Skip 宏块是没有残差的（全部都是0）
         // 色度组件的解码模式还没有学-，-
         Parse_Skip();// Skip 运动矢量的计算
         // 由于之后已经没有数据了，这里执行完毕就返回
@@ -433,28 +450,26 @@ void macroblock::ParseHead()
     }
 
 
-    type = (type_macroblock)pa->read_ae(0x00021000U);
+    mb_type = pa->read_ae(0x00021000U);
     // 为了要知道当前宏块的类型，需要在 ae 算子中加上偏移值来表明当前宏块的具体类型
-    // ae 算子在计算这个句法的时候是能够知道具体的类型的，所以对其结果做了一定的修改
-    // 因为解码出来的 mb_type 对于不同的slice都是从 0 开始的，而枚举值都是不同的
-    // 所以需要一次转化， 把真实值提取出来
-    mb_type = transtype(type);
-    predmode = Pred_NU;
+    // ae 算子在计算这个句法的时候是能够知道具体的类型的，
+    // 所以需要一次转化， 把枚举值转换出来
+    type = transtype(mb_type);
+
+    predmode = Pred_NU;// 帧内的 predmode 在下面计算
     intea_mode = 1; // 应该根据type来判断这个宏块是帧内还是帧间
-    num_mb_part = 4;
-
-    int noSubMbPartSizeLessThan8x8Flag = 1;
-
+    num_mb_part = MbPartNum(type);
+    
     if(type == I_PCM) // PCM 宏块直接按照 固定的方法读取
     {
         for(unsigned i = 0; i < 256; i++) // 16 * 16
             pa->read_un(pa->pV->BitDepthY);
         for(unsigned i = 0; i < 128; i++) // 2 * 8 * 8
             pa->read_un(pa->pV->BitDepthC);
-
         return ;// PCM 宏块结束 返回
     }
 
+    int noSubMbPartSizeLessThan8x8Flag = 1;
     // 前面已经说过，如果分块为4,那么一定是帧间，
     // 而帧内对于分块没有概念，所以对于帧内，分块的值一律设定为1
     if(num_mb_part == 4) // 所有含有sub块的的帧间块
@@ -469,7 +484,7 @@ void macroblock::ParseHead()
             transform_size_8x8_flag = pa->read_ae(0x00022000U);
         else //transform_size_8x8_flag 默认是设置为 0 的
             transform_size_8x8_flag = 0;
-        if(type == I_NxN) // I_NxN
+        if(type == I_NxN) // I_NxN 计算 predmode
             predmode = transform_size_8x8_flag ? Intra_4x4 : Intra_8x8;
         else // 不是I_NxN
         {
@@ -777,17 +792,31 @@ void macroblock::Decode_Inter()
     
     // }
 }
+bool macroblock::is_avaiable(macroblock *mb_N)
+{
+    if(mb_N == NULL) return false;
+    if(this->idx_inpicture < mb_N->idx_inpicture ||\
+       this->idx_slice != mb_N->idx_slice) return false;
+    else return true;
+}
 
-
-int macroblock::transtype(type_macroblock type)
+type_macroblock macroblock::transtype(int mb_type)
 {
     //去掉枚举类型的偏移得到真实的值
-    mb_type = (int) type;
-    if(type >= I_NxN && type <= I_PCM) mb_type -= 0;
-    else if(type == SI_M) mb_type -= 30;
-    else if(type >= P_L0_16x16 && type <= P_Skip) mb_type -= 40;
-    else if(type >= B_Direct_16x16 && type <= B_Skip) mb_type -= 50;
-    else ;
+    int type = 0;
+    if(sl->type == I) type = mb_type;
+    else if(sl->type == P)
+    {
+        // 是 P Slice 中的 P 宏块
+        if(mb_type < 5) type = TYPE_MACROBLOCK_START_INDEX_P + mb_type;
+        else type -= 5; // 是 P slice 中的 I 宏块， 减去 I 在 P 中 的前缀
+    }
+    else// if(sl->type === B) // 是 B slice
+    {
+        if(mb_type < 23) type = TYPE_MACROBLOCK_START_INDEX_B + mb_type;
+        else type -= 23; // 是 B slice 中的 I 宏块， 减去 I 在 B 中 的前缀
+    }
+    return (type_macroblock)type;
 }
 uint8_t macroblock::get_PosByIndex(int index, int& r, int& c)
 {
@@ -796,4 +825,51 @@ uint8_t macroblock::get_PosByIndex(int index, int& r, int& c)
     r = (index_Raster / 4) * 4;
     c = (index_Raster % 4) * 4;
     return index_Raster;
+}
+
+void macroblock::ParseIntra4x4PredMode()
+{
+    int  luma4x4BlkIdxA,  luma4x4BlkIdxB;
+    uint8  intraMxMPredModeA,  intraMxMPredModeB;
+    macroblock* A, * B;
+    uint8  dcPredModePredictedFlag  = 0;
+    uint8 *Intra4x4PredMode = intra->predinfo.intra4x4->Intra4x4PredMode;
+    uint8 *rem_intra4x4_pred_mode = intra->predinfo.intra4x4->rem_intra4x4_pred_mode;
+    uint8 *prev_intra4x4_pred_mode_flag = intra->predinfo.intra4x4->prev_intra4x4_pred_mode_flag;
+    for (uint8_t i = 0; i < 16; i++)
+    {
+        luma4x4BlkIdxA = 0;
+        pic->neighbour_4x4block(this, i, 'A', &A, &luma4x4BlkIdxA);
+        luma4x4BlkIdxB = 0;
+        pic->neighbour_4x4block(this, i, 'B', &B, &luma4x4BlkIdxB);
+        if(!this->is_avaiable(A) || !this->is_avaiable(B) ||\
+           (A->is_interpred() && 1) ||\
+           (B->is_interpred() && 1))
+            dcPredModePredictedFlag = 1;
+        else dcPredModePredictedFlag = 0;
+
+        if(dcPredModePredictedFlag == 1 || (A->predmode != Intra_8x8 && A->predmode != Intra_4x4)) intraMxMPredModeA = 2;
+        else 
+        {
+            if(A->predmode == Intra_4x4) intraMxMPredModeA = A->intra->predinfo.intra4x4->Intra4x4PredMode[luma4x4BlkIdxA];
+            else  intraMxMPredModeA = A->intra->predinfo.intra8x8->Intra8x8PredMode[luma4x4BlkIdxA >> 2];
+        }
+        if(dcPredModePredictedFlag == 1 || (B->predmode != Intra_8x8 && B->predmode != Intra_4x4)) intraMxMPredModeB = 2;
+        else 
+        {
+            if(B->predmode == Intra_4x4) intraMxMPredModeB = B->intra->predinfo.intra4x4->Intra4x4PredMode[luma4x4BlkIdxB];
+            else  intraMxMPredModeB = B->intra->predinfo.intra8x8->Intra8x8PredMode[luma4x4BlkIdxB >> 2];
+        }
+
+        uint8_t predIntra4x4PredMode;
+        predIntra4x4PredMode = Min(intraMxMPredModeA, intraMxMPredModeB);
+        if(prev_intra4x4_pred_mode_flag[i]) Intra4x4PredMode[i] = predIntra4x4PredMode;
+        else 
+        {
+            if(rem_intra4x4_pred_mode[i] < predIntra4x4PredMode) Intra4x4PredMode[i] = rem_intra4x4_pred_mode[i];
+            else Intra4x4PredMode[i] = rem_intra4x4_pred_mode[i] + 1;
+        }
+    }
+    // Sdelete_l(rem_intra4x4_pred_mode);
+    // Sdelete_l(prev_intra4x4_pred_mode_flag);
 }

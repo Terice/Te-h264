@@ -2,6 +2,12 @@
 #include "terror.h"
 #include "gvars.h"
 #include <string.h>
+
+pixmap::pixmap()
+{
+    step = 0;
+    res = NULL;
+}
 pixmap::pixmap(void *data_res, int data_unit_length, area a)
 {
     step = data_unit_length;
@@ -23,6 +29,12 @@ bool  pixmap::checkpos(int x, int y)
 byte* pixmap::transpos(int x, int y)
 {
     return data[y] + x * step;
+}
+
+
+byte* pixmap::operator[](int i) const
+{
+    return data[i];
 }
 bool pixmap::select(point start, area select)
 {

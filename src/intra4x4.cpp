@@ -14,10 +14,10 @@ pic->neighbour_4x4block(current, current->intra->predinfo.intra4x4->index, \
         &c_A,\
         &r_A);\
 if  (mbAddrA)\
-{    mbAddrA->cons->get(r_A + 0, c_A,  &I);\
-     mbAddrA->cons->get(r_A + 1, c_A,  &J);\
-     mbAddrA->cons->get(r_A + 2, c_A,  &K);\
-     mbAddrA->cons->get(r_A + 3, c_A,  &L);\
+{    mbAddrA->cons[0][r_A + 0][c_A] = I;\
+     mbAddrA->cons[0][r_A + 1][c_A] = J;\
+     mbAddrA->cons[0][r_A + 2][c_A] = K;\
+     mbAddrA->cons[0][r_A + 3][c_A] = L;\
 };
 #define GET_NEIGHT_4x4_B() \
 pic->neighbour_4x4block(current, current->intra->predinfo.intra4x4->index, \
@@ -26,10 +26,10 @@ pic->neighbour_4x4block(current, current->intra->predinfo.intra4x4->index, \
         &c_B,\
         &r_B);\
 if  (mbAddrB)\
-{    mbAddrB->cons->get(r_B, c_B + 0,  &A);\
-     mbAddrB->cons->get(r_B, c_B + 1,  &B);\
-     mbAddrB->cons->get(r_B, c_B + 2,  &C);\
-     mbAddrB->cons->get(r_B, c_B + 3,  &D);\
+{    mbAddrB->cons[0][r_B][c_B + 0] =  A;\
+     mbAddrB->cons[0][r_B][c_B + 1] =  B;\
+     mbAddrB->cons[0][r_B][c_B + 2] =  C;\
+     mbAddrB->cons[0][r_B][c_B + 3] =  D;\
 };
 #define GET_NEIGHT_4x4_C() \
 pic->neighbour_4x4block(current, current->intra->predinfo.intra4x4->index,\
@@ -44,10 +44,10 @@ if(current->is_avaiable(mbAddrC))\
         E=F=G=H=D;\
     else\
     {\
-        mbAddrC->cons->get(r_C, c_C + 0,  &E);\
-        mbAddrC->cons->get(r_C, c_C + 1,  &F);\
-        mbAddrC->cons->get(r_C, c_C + 2,  &G);\
-        mbAddrC->cons->get(r_C, c_C + 3,  &H);\
+        mbAddrC->cons[0][r_C][c_C + 0] =  E;\
+        mbAddrC->cons[0][r_C][c_C + 1] =  F;\
+        mbAddrC->cons[0][r_C][c_C + 2] =  G;\
+        mbAddrC->cons[0][r_C][c_C + 3] =  H;\
     }\
 }\
 else \
@@ -61,7 +61,7 @@ pic->neighbour_4x4block(current, current->intra->predinfo.intra4x4->index,\
         &c_D,\
         &r_D);\
 if  (mbAddrD)\
-{    mbAddrD->cons->get(r_D + 3, c_D + 3,  &M);\
+{    mbAddrD->cons[0][r_D + 3][c_D + 3] = M;\
 };
 
 #define get_neighbour_4x4_A GET_NEIGHT_4x4_A
@@ -123,6 +123,10 @@ void Prediction_Intra4x4_V                   (macroblock* current)
     };
 
     // 按列修改为按行复制
+    memcpy(current->pred[0][0], re, 4 * sizeof(int));
+    memcpy(current->pred[0][1], re, 4 * sizeof(int));
+    memcpy(current->pred[0][2], re, 4 * sizeof(int));
+    memcpy(current->pred[0][3], re, 4 * sizeof(int));
 
     // current->pred->setl(re, 0, 4);
     // current->pred->setl(re, 1, 4);

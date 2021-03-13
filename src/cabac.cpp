@@ -2,29 +2,23 @@
 
 #include "genum.h"
 #include "gchart.h"
-#include "gvars.h"
 #include "gfunc.h"
+#include "gvars.h"
+
+#include <iostream>
+#include <cmath>
+#include <string.h>
 
 #include "terror.h"
 #include "nal.h"
 #include "picture.h"
-#include <cmath>
 #include "macroblock.h"
 #include "block.h"
 #include "residual.h"
-
-
-
 #include "array2d.h"
-#include "macroblock.h"
 #include "slice.h"
 #include "parser.h"
-#include <iostream>
-#include "slice.h"
-#include <string.h>
-
-
-
+#include "decoder.h"
 
 int cabac::cread_ae(uint32 syntax)
 {
@@ -36,15 +30,16 @@ int cabac::cread_ae(uint32 syntax)
         init_variable();
         init_engine();
         state = 1;
-        if(terr.cabac_state_running()) printf(">>cabac: INIT!!!!!!\n");
+        if(terr.cabac_state_running()) printf(">>cabac: open!!!!!!\n");
     }
     result = Decode(syntax);
     //后处理
-    if(syntax == 0x00022000U && (type_macroblock)result == I_PCM) {init_engine();}
+    // 这句话写在读取mb_type 里面去了，因为在不同的 slice 中 I_PCM 的值是不一样的，所以放在这里也不对
+    // if(syntax == 0x00022000U && (type_macroblock)result == I_PCM) {init_engine();}
 
-    int a = syntax >> 12 & 0xFF;
     if(terr.cabac_result_ae())
     {
+        int a = syntax >> 12 & 0xFF;
         // if((a >= 0x61 && a <= 0x64 ) || (a == 0x41 || a == 0x43))
         printf(">>cabac: result of |%8x| is : |%5d|\n", syntax, result);
         // else
@@ -84,9 +79,9 @@ uint32 cabac::Decode(uint32 syntaxelements)
 
     return result;
 }
-uint8 inline cabac::decode_binary(uint16 ctx){return DecodeValueUsingCtxIdx(ctx, 0);}
-uint8 inline cabac::decode_bypass()          {return DecodeValueUsingCtxIdx(0, 1);  }
-uint8 inline cabac::decode_finaly()          {return DecodeValueUsingCtxIdx(276, 0);}
+bool inline cabac::decode_binary(uint16 ctx){return DecodeValueUsingCtxIdx(ctx, 0);}
+bool inline cabac::decode_bypass()          {return DecodeValueUsingCtxIdx(0, 1);  }
+bool inline cabac::decode_finaly()          {return DecodeValueUsingCtxIdx(276, 0);}
 int cabac::decode_unary(uint16 ctx, int offset)
 {
     int result = 0;
@@ -101,10 +96,26 @@ int cabac::decode_unary(uint16 ctx, int offset)
         return 0;
     
 }
+int cabac::decode_uegk(int k)
+{
+    int result = 0;
+    int suf = 0;
+    while(decode_bypass())
+    {
+        result <<= 1;// 先左移一位把最低位空出来
+        result |= 1;// 还在循环就说明当前解码位是 1
+    }
+    result << k; // 后缀的长度就是由 k 指定的，需要左移相应的位数说明是前缀
+    while(k--) // k 判定结束之后正好自减，得到后缀的bit位需要左移的位数
+    {
+        suf |= (decode_bypass() << k);
+    }
+    return result + suf; // 两者是相加的关系而不是与运算的关系
+}
 bool cabac::DecodeValueUsingCtxIdx(uint16 ctxIdx_value, uint8 bypassFlag_value)
 {
-    pStateIdx = (*ctxIdxOfInitVariables)[ctxIdx_value][0];
-    valMPS    = (*ctxIdxOfInitVariables)[ctxIdx_value][1];
+    pStateIdx = (ctxIdxOfInitVariables)[ctxIdx_value][0];
+    valMPS    = (ctxIdxOfInitVariables)[ctxIdx_value][1];
     bool binVal;
     if(bypassFlag_value)//decode bypass
     {
@@ -116,7 +127,7 @@ bool cabac::DecodeValueUsingCtxIdx(uint16 ctxIdx_value, uint8 bypassFlag_value)
         {
             printf(">>cabac: bypass decode\n");
             printf("         codIOffset: %5d\t", codIOffset);
-            printf("          -------------------result : %d\n", binVal);
+            printf("         -------------------result : %d\n", binVal);
         }
     }
     else 
@@ -126,12 +137,12 @@ bool cabac::DecodeValueUsingCtxIdx(uint16 ctxIdx_value, uint8 bypassFlag_value)
             codIRange = codIRange - 2;
             if(codIOffset >= codIRange) binVal = 1;
             else {binVal = 0;RenormD();}
-            // if(terr.cabac_state_running())     
-            // {
-            //     printf(">>cabac: terminate decode\n");
-            //     printf("         codIOffset: %5d\t", codIOffset);
-            //     printf("          -------------------result : %d\n", binVal);
-            // }
+            if(terr.cabac_state_running())     
+            {
+                printf(">>cabac: terminate decode\n");
+                printf("         codIOffset: %5d\t", codIOffset);
+                printf("         -------------------result : %d\n", binVal);
+            }
         }
         else//decode decision
         {
@@ -164,15 +175,15 @@ bool cabac::DecodeValueUsingCtxIdx(uint16 ctxIdx_value, uint8 bypassFlag_value)
                 
                 // 如果当前的概率索引是0，也就是说状态不断转换的过程中小概率字符出现的几率已经到了0.5,而这个if是用来处理小概率字符的
                 // 也就是说现在小概率字符几率到了0.5,并且马上要处理的这个字符也是小概率字符，那么小概率字符就会变成大概率字符，所以有了下一步
-                if(pStateIdx == 0) {(*ctxIdxOfInitVariables)[ctxIdx_value][1] = 1 - valMPS;};
-                (*ctxIdxOfInitVariables)[ctxIdx_value][0] = transIdxLPS[pStateIdx];// 状态往小概率转
+                if(pStateIdx == 0) {(ctxIdxOfInitVariables)[ctxIdx_value][1] = 1 - valMPS;};
+                (ctxIdxOfInitVariables)[ctxIdx_value][0] = transIdxLPS[pStateIdx];// 状态往小概率转
             }
             else // 否则说明当前是大概率字符，取出valMPS，并且当前ctxIdx的状态往右边走一步（大概率方向）
             {
                 // 大概率字符的区间始终都是从0开始的，所以不需要进行区间的变换，
                 // 下一次直接把小区间的长度减去就得到整个解码区间了
                 binVal = (bool)valMPS;
-                (*ctxIdxOfInitVariables)[ctxIdx_value][0] = transIdxMPS[pStateIdx];
+                (ctxIdxOfInitVariables)[ctxIdx_value][0] = transIdxMPS[pStateIdx];
             }
             // 这里无论是if还是else 最后得到的codIRange的值都一定是代表全区间
             RenormD();
@@ -198,7 +209,7 @@ uint8 cabac::init_variable()
     uint8 ctxRangeCol = 0, mncol = 0;
     uint8 preCtxState = 0;
     int m = 0, n = 0;
-    ctxIdxOfInitVariables = new array2d<uint8_t>(1024, 2, 0);
+    // ctxIdxOfInitVariables = new array2d<uint8_t>(1024, 2, 0);
     
     type_slice lifeTimetype_slice = lifeTimeSlice->type;
     if(lifeTimetype_slice == I) {mncol = 0;}
@@ -206,13 +217,13 @@ uint8 cabac::init_variable()
  
     pStateIdx = 63; valMPS = 0;
     //每个上下文模型是由大概率字符valMPS(Most Probable Symbol，MPS)和概率状态索引(pStateldx)两个部分组成
-    (*ctxIdxOfInitVariables)[276][0] = pStateIdx;
-    (*ctxIdxOfInitVariables)[276][1] = valMPS   ;
+    (ctxIdxOfInitVariables)[276][0] = pStateIdx;
+    (ctxIdxOfInitVariables)[276][1] = valMPS   ;
 
     // 句法元素表一共有43行，要一一对应初始化
     // 这里的43不是指句法元素的数量，也不是ctxIdx的数量
     // 因为一个句法元素可能有多组ctxIdx，而ctxIdx是1024个，所以这里的ctxIdx的变量值是1024行
-    for (int i = 0; i < 43; i++)     //i is ctx  Idx range of current syntax element, init all 43 rows
+    for(int i = 0; i < 43; i++)     //i is ctx  Idx range of current syntax element, init all 43 rows
     {
         // ctxRangeCol确定这一slice对应的是哪一行元素
         if(lifeTimetype_slice == SI) {ctxRangeCol = 0;}
@@ -244,8 +255,8 @@ uint8 cabac::init_variable()
                     pStateIdx = preCtxState - 64;
                     valMPS = 1;
                 }
-                (*ctxIdxOfInitVariables)[j][0] = pStateIdx;
-                (*ctxIdxOfInitVariables)[j][1] = valMPS   ;
+                (ctxIdxOfInitVariables)[j][0] = pStateIdx;
+                (ctxIdxOfInitVariables)[j][1] = valMPS   ;
             }
         }
     }
@@ -321,7 +332,7 @@ uint16 cabac::read_mb_type()
         else
         {
             if(decode_finaly()) // 第1位， 是不是 I_PCM
-                return 25;//I_PCM
+                {return 25; init_engine();}//I_PCM
             else // Intra_16x16
             {         // bin + 1
                 result = 1;// 16x16 从1开始 0 号是 I_NxN
@@ -422,7 +433,7 @@ uint16 cabac::read_mb_type()
         // 否则是帧内块，换 ctxIdx
         ctxIdx = 0 + suffix_ctxIdxOffset;
         if(decode_finaly()) // 快进到休止解码判断 I_PCM
-            return 30;
+            { init_engine();return 30;}
         else
         {
             int predmode;
@@ -443,14 +454,11 @@ uint16 cabac::read_mb_type()
 
             return result;
         }
-        
-        
     }
     else if(slice_type == SI)
     {
         uint8 prefix_ctxIdxOffset = 0;
         uint8 suffix_ctxIdxOffset = 3;
-
     }
     else /*if(slice_type == B)*/
     {
@@ -552,7 +560,7 @@ uint16 cabac::read_mb_type()
         if(result <= 23) return result;
         ctxIdx = 0 + suffix_ctxIdxOffset;
         if(decode_finaly()) // 快进到休止解码判断 I_PCM
-            return 48;
+            {init_engine();return 48;}
         else // 和求 P 中的 I块一样的步骤
         {
             int predmode;
@@ -999,8 +1007,8 @@ uint8 cabac::read_coded_block_flag(int syntaxelement)
     
     int index_A = 0;
     int index_B = 0;
-    macroblock* mbAddrA = NULL; pic->neighbour_4x4block(current, index, 'A',  &index_A, &mbAddrA);
-    macroblock* mbAddrB = NULL; pic->neighbour_4x4block(current, index, 'B',  &index_B, &mbAddrB);
+    macroblock* mbAddrA = NULL; pic->neighbour_4x4block(current, index, 'A', &mbAddrA,  &index_A);
+    macroblock* mbAddrB = NULL; pic->neighbour_4x4block(current, index, 'B', &mbAddrB,  &index_B);
 
     block*  transBlockA;
     block*  transBlockB;
@@ -1119,7 +1127,7 @@ uint32 cabac::read_coeff_abs_level_minus1(int syntaxelement)
 
     int binIdx = -1;
     //当前的binIdx解出来的ctxIdx
-    uint16 result = 0;
+    int result = 0;
     //当前位上的数据
     uint32 result_cur = 0;
     //当前解出来的二进制串的数据
@@ -1145,38 +1153,54 @@ uint32 cabac::read_coeff_abs_level_minus1(int syntaxelement)
     int numDecodAbsLevelEq1 = (syntaxelement >> 24) & 0xF;
     int numDecodAbsLevelGt1 = (syntaxelement >> 20) & 0xF;
     //求前缀二值串
-    binIdx = -1;
-    do
-    {
-        binIdx++;// sumi
-        //求cat索引的ctxIdxInc
-        uint8 ctxIdxInc = 0;
-        if(binIdx == 0) ctxIdxInc = ((numDecodAbsLevelGt1 != 0) ? 0: Min(4, (1 + numDecodAbsLevelEq1)));
-        else ctxIdxInc = 5 + Min(4 - ((ctxBlockCat == 3)?1 : 0), numDecodAbsLevelGt1);
+    // binIdx = -1;
+    // do
+    // {
+    //     binIdx++;// sumi
+    //     //求cat索引的ctxIdxInc
+    //     uint8 ctxIdxInc = 0;
+    //     if(binIdx == 0) ctxIdxInc = ((numDecodAbsLevelGt1 != 0) ? 0: Min(4, (1 + numDecodAbsLevelEq1)));
+    //     else ctxIdxInc = 5 + Min(4 - ((ctxBlockCat == 3)?1 : 0), numDecodAbsLevelGt1);
 
-        ctxIdx = ctxIdxInc + prefix_ctxIdxOffset + ctxIdxBlockCatOffsetOfctxBlockCat[3][ctxBlockCat];
-        result_cur = decode_binary(ctxIdx);
-        result_cur = result_cur << binIdx;
-        result_str += result_cur;
-    } while( ((prefix_result = IsIn_TU_binarization(result_str, 14, binIdx)) == -1) && (binIdx < 13) );
-    
+    //     ctxIdx = ctxIdxInc + prefix_ctxIdxOffset + ctxIdxBlockCatOffsetOfctxBlockCat[3][ctxBlockCat];
+    //     result_cur = decode_binary(ctxIdx);
+    //     result_cur = result_cur << binIdx;
+    //     result_str += result_cur;
+    // } while( ((prefix_result = IsIn_TU_binarization(result_str, 14, binIdx)) == -1) && (binIdx < 13) );
+
+    // 解第一位的ctx
+    ctxIdx = ((numDecodAbsLevelGt1 != 0) ? 0: Min(4, (1 + numDecodAbsLevelEq1))) + prefix_ctxIdxOffset + ctxIdxBlockCatOffsetOfctxBlockCat[3][ctxBlockCat];
+    if(decode_binary(ctxIdx))
+    {
+        result++;
+        // 第二位换ctx
+        ctxIdx = 5 + Min(4 - ((ctxBlockCat == 3)?1 : 0), numDecodAbsLevelGt1) + prefix_ctxIdxOffset + ctxIdxBlockCatOffsetOfctxBlockCat[3][ctxBlockCat];
+        for(int i = 0; i < 13; i++) // 因为cMax = 14, 所以后面还可能有最长13位
+        {
+            if(decode_binary(ctxIdx)) result++;
+            else break;
+        }
+    }
+    else
+        result = 0;
     if(terr.cabac_result_bin()) std::cout << ">>cabac: break line -------------------------------for prefix & suffix" << std::endl;
     //求后缀二值串，旁路解码
     uint8 binIdx2 = -1;
     result_cur = 0;
     result_str = 0;
     //如果前缀不足14位或者是一个14位的截断数，那么没有后缀
-    if(binIdx < 13 || (binIdx == 13 && prefix_result == 13)){suffix_result = 0;}
-    else if(prefix_result == 14)
-    {
-        do
-        {
-            binIdx2++;// sumi
-            result_cur = decode_bypass();
-            result_str <<= 1;
-            result_str += result_cur;
-        } while((suffix_result = IsIn_UEGk_binarization(result_str, binIdx2, 0, 0, 0)) == -1);
-    }
+    if(prefix_result <= 14) suffix_result = 0;
+    // else // if(prefix_result == 14)
+    // {
+    //     do
+    //     {
+    //         binIdx2++;// sumi
+    //         result_cur = decode_bypass();
+    //         result_str <<= 1;
+    //         result_str += result_cur;
+    //     } while((suffix_result = IsIn_UEGk_binarization(result_str, binIdx2, 0, 0, 0)) == -1);
+    // }
+    else suffix_result = decode_uegk(0);
     result = suffix_result + prefix_result;
 
     return result;
@@ -1341,8 +1365,8 @@ uint8 cabac::read_ref_idx(int syntaxelements)
     if(decode_binary(ctxIdx))
     {
         result++;
-        ctxIdx = 4 + ctxIdxOffset;
-        result += decode_unary(ctxIdx, 1);
+        ctxIdx = 4 + ctxIdxOffset; // 之后的上下文从 4 开始
+        result += decode_unary(ctxIdx, 1);// 解一位之后上下文换 5 开始
     }
     else
         result = 0;
@@ -1375,7 +1399,7 @@ int cabac::read_mvd_lx(int syntaxelements)
     int64 suffix_result = 0;
     //如果是水平预测，偏移是40，否则47
     if(spatialDirection == 0) prefix_ctxIdxOffset = 40;
-    else prefix_ctxIdxOffset = 47;
+    else                      prefix_ctxIdxOffset = 47;
 
 
     auto f = [p,mbPartIdx,subMbPartIdx,Pred_L, temporalDirection, spatialDirection, MbaffFrameFlag](macroblock* cur,int mbPartIdxN, char direction)->uint16_t{
@@ -1416,54 +1440,81 @@ int cabac::read_mvd_lx(int syntaxelements)
         return absMvdCompN;
     };
     uint8 ctxIdxInc = 0;
-    int binIdx = -1;
-    do
+    // int binIdx = -1;
+    // do
+    // {
+    //     binIdx++;// sumi
+    //     if(binIdx == 0)
+    //     {
+    //         uint16 absMvdCompA = f(cur,mbPartIdx, 'A');
+    //         uint16 absMvdCompB = f(cur,mbPartIdx, 'B');
+    //         uint16 absMvdComp = absMvdCompA + absMvdCompB;
+    //         if(absMvdComp < 3) ctxIdxInc = 0;
+    //         else if(absMvdComp > 32) ctxIdxInc = 2;
+    //         else ctxIdxInc = 1;
+    //     }
+    //     else if(binIdx >= 1 && binIdx <= 3) ctxIdxInc = binIdx + 2;
+    //     else ctxIdxInc = 6;
+    //     ctxIdx =  ctxIdxInc + prefix_ctxIdxOffset;
+    //     result_cur = (uint8_t)DecodeValueUsingCtxIdx(ctxIdx, 0);
+    //     result_cur = result_cur << binIdx;
+    //     prefix_result += result_cur;
+    // } while(IsIn_TU_binarization(prefix_result, 9 , binIdx) == -1);
+    // prefix_result = IsIn_TU_binarization(prefix_result, 9 , binIdx);
+
+    uint16 absMvdCompA = f(cur,mbPartIdx, 'A');
+    uint16 absMvdCompB = f(cur,mbPartIdx, 'B');
+    uint16 absMvdComp = absMvdCompA + absMvdCompB;
+    if(absMvdComp < 3) ctxIdxInc = 0;
+    else if(absMvdComp > 32) ctxIdxInc = 2;
+    else ctxIdxInc = 1;
+    ctxIdx = ctxIdxInc + prefix_ctxIdxOffset;
+    if(decode_binary(ctxIdx))
     {
-        binIdx++;// sumi
-        if(binIdx == 0)
+        prefix_result++;
+        for(int i = 0; i < 8; i++)// 前缀是 9 位的截断数，解码一位之后还可能有 8 位
         {
-            uint16 absMvdCompA = f(cur,mbPartIdx, 'A');
-            uint16 absMvdCompB = f(cur,mbPartIdx, 'B');
-            uint16 absMvdComp = absMvdCompA + absMvdCompB;
-            if(absMvdComp < 3) ctxIdxInc = 0;
-            else if(absMvdComp > 32) ctxIdxInc = 2;
-            else ctxIdxInc = 1;
+                //  起始值  //大于6则ctxIdxInc为6      // ctx偏移
+            ctxIdx = 3 + (i > 3 ? i : 3) + prefix_ctxIdxOffset;
+            if(decode_binary(ctxIdx)) prefix_result++;
+            else break;
         }
-        else if(binIdx >= 1 && binIdx <= 3) ctxIdxInc = binIdx + 2;
-        else ctxIdxInc = 6;
-        // if(cur->id_slice == 3 && cur->position_x == 10 && cur->position_y == 28 && mbPartIdx == 1)
-        //     ctxIdxInc = 2;
-        ctxIdx =  ctxIdxInc + prefix_ctxIdxOffset;
-        result_cur = (uint8_t)DecodeValueUsingCtxIdx(ctxIdx, 0);
-        result_cur = result_cur << binIdx;
-        prefix_result += result_cur;
-    } while(IsIn_TU_binarization(prefix_result, 9 , binIdx) == -1);
-    prefix_result = IsIn_TU_binarization(prefix_result, 9 , binIdx);
-    //求后缀，旁路解码 
-    uint8 binIdx2 = -1;
-    result_cur = 0;
-    uint32 result_str = 0;
-    //如果前缀不足9位或者是一94位的截断数，那么没有后缀
-    if((binIdx < 8 || (binIdx == 8 && prefix_result == 8))){suffix_result = 0;}
-    else if(prefix_result == 9 )
-    {
-        do
-        {
-            binIdx2++;// sumi
-            result_cur = (uint8_t)DecodeValueUsingCtxIdx(0, 1);
-            result_str <<= 1;
-            result_str += result_cur;
-        } while((suffix_result = IsIn_UEGk_binarization(result_str, binIdx2, 0, 0, 3)) == -1);
     }
-    int sig = 1;
-    if(prefix_result != 0 && signedValFlag)
-        sig = (DecodeValueUsingCtxIdx(0,1) == 1) ? -1 : 1;
+    else
+        return prefix_result = 0;
+    // uint8 binIdx2 = -1;
+    // result_cur = 0;
+    // uint32 result_str = 0;
+    //求后缀，旁路解码 
+    //如果前缀不足9位或者是一9位的截断数，那么没有后缀
+    if(prefix_result <= 9) suffix_result = 0;
+    else suffix_result = decode_uegk(3);// 否则是 3 阶 解码
+    // else if(prefix_result == 9 )
+    // {
+    //     do
+    //     {
+    //         binIdx2++;// sumi
+    //         result_cur = (uint8_t)DecodeValueUsingCtxIdx(0, 1);
+    //         result_str <<= 1;
+    //         result_str += result_cur;
+    //     } while((suffix_result = IsIn_UEGk_binarization(result_str, binIdx2, 0, 0, 3)) == -1);
+    // }
+    
+
+    // if(prefix_result != 0 && signedValFlag)
+    //     sig = (DecodeValueUsingCtxIdx(0,1) == 1) ? -1 : 1;
+        
+    int sig = 1; // 最后还需要解码一位符号位
+    if(prefix_result) sig = decode_bypass() ? -1 : 1;// 因为已经知道需要解码符号位了，所以符号标志位不再判断
+    else return 0;// 前缀为 0 可以直接返回 0 了
     result = sig * (suffix_result + prefix_result);
+
     return result;
 }
 
 
-int cabac::IsIn_U_binarization(uint64 value, uint8 binIdx)
+// 这三个方法已经不需要了，留在这里做方法的算法说明吧
+int IsIn_U_binarization(uint64 value, uint8 binIdx)
 {
     uint32 a = 0;
     while((value & 0x1) == 1)
@@ -1474,7 +1525,7 @@ int cabac::IsIn_U_binarization(uint64 value, uint8 binIdx)
     if(binIdx == a) return binIdx; 
     else return -1;
 }
-int cabac::IsIn_TU_binarization(uint32 value, uint8 cMax, uint8 binIdx)
+int IsIn_TU_binarization(uint32 value, uint8 cMax, uint8 binIdx)
 {
     int a = 0;
     if(binIdx + 1 == cMax) 
@@ -1489,7 +1540,7 @@ int cabac::IsIn_TU_binarization(uint32 value, uint8 cMax, uint8 binIdx)
     }
     else return IsIn_U_binarization(value, binIdx);
 }
-int cabac::IsIn_UEGk_binarization(uint32 value, uint8 binIdx, uint8  signedValFlag, uint8 uCoeff, uint8 k)
+int IsIn_UEGk_binarization(uint32 value, uint8 binIdx, uint8  signedValFlag, uint8 uCoeff, uint8 k)
 {
     uint8 length  = binIdx + 1;
     //求前缀的长度：
@@ -1541,24 +1592,33 @@ int cabac::IsIn_UEGk_binarization(uint32 value, uint8 binIdx, uint8  signedValFl
     return prefix + suffix;
 }
 
+
+bool cabac::slice_new(picture* p, slice *sl)
+{
+    set_slice(sl);
+    set_pic(p);
+
+    init_variable();
+    init_engine();
+}
 bool cabac::slice_end()
 {
-    delete ctxIdxOfInitVariables;
-    if(state == 1) state = 0;
-
+    state = 0;
+    if(terr.cabac_state_running()) printf(">>cabac: close!!!!!\n");
+    
     return true;
 }
 bool cabac::set_pic(picture* pic1){this->pic = pic1; return true;}
 bool cabac::set_slice(slice* sl){this->lifeTimeSlice = sl; return true;}
 
-cabac::cabac(parser* parser)
+cabac::cabac(parser* p)
 {
     b3 = 0;
     b1 = 0;
     state = 0;
-    this->pa = parser;
+    this->pa = p;
 }
 cabac::~cabac()
 {
-    delete ctxIdxOfInitVariables;
+    // delete ctxIdxOfInitVariables;
 }

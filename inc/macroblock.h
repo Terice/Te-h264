@@ -35,7 +35,7 @@ private:
 
     // 枚举类型转换为实值
     // 枚举用来称谓，实值用来读表
-    int transtype(type_macroblock type);
+    type_macroblock transtype(int mb_type);
 
     // 子块信息的读取
     void Parse_Sub(int*);

@@ -1,5 +1,7 @@
 #include "reader.h"
 
+#define ANNEX_B
+
 #include "reader.h"
 #include <cmath>
 #include <assert.h>
@@ -58,9 +60,58 @@ void reader::bflin(uint8 *data)
 {
 
 }
-void reader::bflin(FILE *data)
+void reader::bflin(FILE *res)
 {
-    unsigned long re = fread(buf1, sizeof(char), READER_SIZE_BUFFER, res);
+    unsigned long re = 0;
+#ifndef ANNEX_B
+    if(res)
+        re = fread(buf1, sizeof(char), READER_SIZE_BUFFER, res);
+    else re = 0;
+#else
+    if(res)
+    {
+        int state = 0;//去掉防止竞争字节的状态机
+        int ch = 0;
+        for (size_t i = 0; i < READER_SIZE_BUFFER; i++)
+        {
+            ch = fgetc(res);
+            if(ch == EOF) break;
+
+            //0表示正常，1表示出现第一个0x00， 2表示出现第二个0x00并且等待下一个03   3表示出现03   4表示出现 0x01 或者 0x02 或者 0x03
+            switch (state)
+            {
+                case 0:if(ch == 0) state = 1; break;
+                case 1:if(ch == 0) state = 2; else state = 0; break;
+                case 2:if(ch == 3) state = 3; else if(ch == 0) state = 2; else state = 0; break;//如果出现03那么下一个状态，如果当前仍然是0，那么维持状态，否则解除状态
+                case 3:if(ch == 1 || ch == 2 || ch == 3 || ch == 0) state = 4; else state = 0; break;
+                default:state = 0; break;
+            }
+            //如果出现防止竞争序列，索引后退一个char，当前字符读入0x03位置上，然后count自增
+            if(state == 4)
+            {
+                re--;
+                state = 0;
+            }
+            data[re] = (unsigned char)ch;
+            re++;
+        }
+        //如果最后一个字节是危险的字节，
+        //那么尝试读取下一个字符来判断这个字节是否应该去掉
+        if(state == 3)
+        {
+            ch = fgetc(res);
+            if(ch == 1 || ch == 2 || ch == 3 || ch == 0)
+            {
+                data[READER_SIZE_BUFFER - 1] = (unsigned char)ch;
+                state = 0;
+            }
+            else fseek(res, -1L, SEEK_CUR);
+        }
+    }
+    else
+        re = 0;
+#endif
+
     pos_max = re;
 }
 inline void reader::bopen()
@@ -87,7 +138,7 @@ inline bool reader::balgi()
     else return false;
 }
 
-bool reader::bforc()
+bool reader::bforc_ne()
 {
     if(!pos_bits) return true;
     pos_bits = 0;

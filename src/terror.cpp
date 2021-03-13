@@ -3,6 +3,7 @@
 #include <iostream>
 #include <lua5.1/lua.hpp>
 
+terror terr;
 
 terror::terror()
 {
@@ -14,6 +15,11 @@ terror::~terror()
 
 }
 
+void terror::error(std::string str)
+{
+    std::cout << ">>terr: " << str << std::endl;
+    exit(-1);
+}
 
 void terror::tconf(std::string conf)
 {
@@ -23,7 +29,7 @@ void terror::tconf(std::string conf)
     //先load一次lua文件，然后执行一次匿名函数（也就是这个文件）
     if(luaL_loadfile(L, conf.c_str()) || lua_pcall(L,0,conf_length,0))
     {
-        std::cout << "lua file open error " << std::endl;   
+        std::cout << "lua file open error " << std::endl;
     }
     char *parameters = (char*)&de;
     //用lua的栈按按顺序返回这些控制符

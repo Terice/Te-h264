@@ -99,9 +99,9 @@ void Weight_defaultWeight(matrix& m0, matrix& m1, matrix& out, bool flag_0, bool
 {
     matrix zero(out.w, out.h, 0);
     if(flag_0 && flag_1)
-    {out += (m0 + m1);}
+    {out = (out + (m0 + m1));}
     else
-    {out += ((flag_0?m0:zero) + (flag_1?m1:zero));}
+    {out = (out + ((flag_0?m0:zero) + (flag_1?m1:zero)));}
 }
 // is_explicit 指明是否是显式加权
 // 显式加权会用到slice中的加权参数

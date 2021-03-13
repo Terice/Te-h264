@@ -64,14 +64,19 @@ public:
 };
 
 template <class T>
+T* array2d<T>::operator[](int i)
+{
+    return data + i * w;
+}
+template <class T>
 T array2d<T>::get(int i)
 {
-    return data + i;
+    return data[i];
 }
 template <class T>
 T array2d<T>::get(int x,  int y)
 {
-    return data + y * w + x;
+    return data[y * w + x];
 }
 template <class T>
 bool array2d<T>::set(int x,  int y, T value)
