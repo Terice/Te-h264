@@ -3,6 +3,7 @@
 #include "picture.h"
 #include "gfunc.h"
 #include "gmbinfo.h"
+#include "neighbour.h"
 
 // 换成目标宏块内的坐标
 // 目标宏块 在 420 nombaddf 一定是一样的
@@ -24,63 +25,38 @@ void target_macroblock(int maxW,  int xN, int yN, char *R)
         else                                    *R =  0 ;// 不存在
     }
 }
-
-// 没有sub，并且所有的块都具有相同的尺寸
-void neighbour_position_nonsub(\
-    int index, \
-    char direction, \
-    int width_part, int height_part,\
-    int width_all , int height_all, \
-    int * x_result, int *y_result,\
-    char *target
-)
-{    
-    /*宏块的坐标轴
-        0----> x
-        |
-        V y
-    */
-    int8 xD = 0, yD = 0;//相邻块坐标差
-    int8 xN = 0, yN = 0;//计算的坐标相对于目标宏块的差
-    int xW  = 0, yW = 0;//计算的坐标在宏块中的绝对位置
-    int xP  = 0, yP = 0;//计算的坐标在宏块中的绝对位置
-
-    uint8  indexBlockSideWidth = 0,  indexBlockSideHeight = 0;//索引块高和块宽
-    uint8 sampleBlockSideWidth = 0, sampleBlockSideHeight = 0;//样点块高和宽
-
-    //全块的宽度和高度，以样点为单位
-    int maxW = width_all;
-    int maxH = height_all;
-    sampleBlockSideHeight = height_part;
-    sampleBlockSideWidth = width_part;
-
-    //确定索引块的宽，高
-    indexBlockSideWidth  = maxW / sampleBlockSideWidth;
-    indexBlockSideHeight = maxH / sampleBlockSideHeight;
-
+// 当前的相对坐标 加上偏移得到偏移坐标
+/// @param width 是预测的宽度
+void trans_adddelta(char direction, int xP, int yP, int width, int *xN, int *yN)
+{
     //确定在所取方向上的坐标偏移
+    int xD = 0, yD = 0;
     switch (direction)
     {
-    case 'A':xD = -1;                   yD =  0; break;
-    case 'B':xD =  0;                   yD = -1; break;
-    case 'C':xD = sampleBlockSideWidth; yD = -1; break;
-    case 'D':xD = -1;                   yD = -1; break;
+    case 'A':xD = -1;    yD =  0; break;
+    case 'B':xD =  0;    yD = -1; break;
+    case 'C':xD = width; yD = -1; break;
+    case 'D':xD = -1;    yD = -1; break;
     default:break;
     }
-
-    //如果是4x4块在16x16中的索引，那么需要逆扫描
-    /*if(blockType == 1 && colorType == 1)*/
-    // index = block4x4Index[index];
-    //索引换成样点块内样点的坐标并且加上偏移 得到 相对坐标
-    xN = (index % indexBlockSideWidth ) * sampleBlockSideWidth  + xD;
-    yN = (index / indexBlockSideHeight) * sampleBlockSideHeight + yD;
-    // 检查目标的位置是哪个宏块，用target来记载
-    target_macroblock(sampleBlockSideWidth, xN, yN, target);
-    //相对坐标换成目标宏块内坐标
-    target_position(maxW, maxH, xN, yN, &xW, &yW); 
-    *x_result = xW;
-    *y_result = yW;
+    *xN = xP + xD;
+    *yN = yP + yD;
 }
+// 目标方向转换成目标宏块
+macroblock * trans_macroblock(macroblock * current, char direction)
+{
+    switch (direction)
+    {
+    case 'A': return current->neighbour.A.avaiable ? current->neighbour.A.pointer : NULL; break;
+    case 'B': return current->neighbour.B.avaiable ? current->neighbour.B.pointer : NULL; break;
+    case 'C': return current->neighbour.C.avaiable ? current->neighbour.C.pointer : NULL; break;
+    case 'D': return current->neighbour.D.avaiable ? current->neighbour.D.pointer : NULL; break;
+    case 'N': return current; break;
+    case  0 : return NULL; break;
+    default: break;
+    }
+}
+
 // 有sub，需要 PartIdx， subPartIdx
 void neighbour_position_sub(\
     type_macroblock type_cur,\
@@ -117,7 +93,6 @@ void neighbour_position_sub(\
     {
         predPartWidth = MbPartWidth(type_cur);
     }
-
     switch (direction)
     {
     case 'A':xD = -1;            yD = 0 ; break;
@@ -128,14 +103,16 @@ void neighbour_position_sub(\
     }
     xN = x + xS + xD;
     yN = y + yS + yD;
-    target_macroblock(predPartWidth, xN, yN, target);
+    target_macroblock(16, xN, yN, target);
     target_position(width_all, height_all, xN, yN, &xW, &yW);
     *x_result = xW;
     *y_result = yW;
 }
 
+// 计算目标宏块内起始坐标在目标宏块内的 两级 索引
 void neighbour_indice_sub(int xP, int yP, macroblock *N, int *mbPartIdx, int *subPartIdx)
 {
+    if(!N) return;// 如果是NULL直接返回表示不可用
     type_macroblock type = N->type;
     // 如果是 I 宏块，
     if(type < TYPE_MACROBLOCK_START_INDEX_P) *mbPartIdx = 0;
@@ -163,10 +140,253 @@ void neighbour_indice_luma8x8(int xP, int yP, int *luma8x8BlkIdx)
 
 
 
-MacroBlockNeighInfo neighbour_part(macroblock *current, int mbPartIdx, int subPartIdx)
+
+void neighbour_macroblock(macroblock *current, char direction, macroblock **result)
 {
-    MacroBlockNeighInfo result;
-    result.avaiable = false;
+    *result = trans_macroblock(current, direction);
+}
+void neighbour_motionvector(
+    macroblock *current, int mbPartIdx, int subPartIdx,\
+    int listSuffixFlag, MotionVector **mv_lX
+)
+{
+    macroblock* A = NULL;
+    macroblock* B = NULL;
+    macroblock* C = NULL;
+    macroblock* D = NULL;
+
+    int mbPartIdx_A = -1;int subPartIdx_A = -1;int refIdxLX_A = -1;MotionVector mv_lx_A;
+    int mbPartIdx_B = -1;int subPartIdx_B = -1;int refIdxLX_B = -1;MotionVector mv_lx_B;
+    int mbPartIdx_C = -1;int subPartIdx_C = -1;int refIdxLX_C = -1;MotionVector mv_lx_C;
+    int mbPartIdx_D = -1;int subPartIdx_D = -1;int refIdxLX_D = -1;MotionVector mv_lx_D;
+
 
     
+    predmode_mb_part Pred_LX = listSuffixFlag ? Pred_L1 : Pred_L0;
+    int8* ref_idx_lx = listSuffixFlag == 1 ? current->inter->ref_idx_l1 : current->inter->ref_idx_l0;
+    int refIdxLX = ref_idx_lx[mbPartIdx];
+
+    auto f_1 = [&current, listSuffixFlag, mbPartIdx, subPartIdx, Pred_LX](char direction, int& mbPartIdx_N, int& subPartIdx_N, int& refIdxLX_N, int mv_lx_N[2])->macroblock*
+    {
+        
+        macroblock* N ;//=  get_PartNeighbour(current, direction, 0x010, mbPartIdx, subPartIdx, mbPartIdx_N, subPartIdx_N);
+        neighbour_part_16x16(current, direction, mbPartIdx, subPartIdx, &N, &mbPartIdx_N, &subPartIdx_N);
+        int refIdx = -1;
+        // 如果 N 不可用 || 是帧内 || 不预测
+        // 那么就直接返回
+        uint8_t predFlagLX = PredFlag(N, mbPartIdx_N, listSuffixFlag);
+        if(!current->is_avaiable(N) || N->is_intrapred() || !predFlagLX)
+        {
+            refIdx = -1;
+            mv_lx_N[0] = 0;
+            mv_lx_N[1] = 0;
+        }
+
+        predmode_mb_part premode_cur = MbPartPredMode(current->type, mbPartIdx);
+        predmode_mb_part premode_cur_sub = current->num_mb_part == 4 ? \
+                                            SubMbPartPredMode(current->inter->sub[mbPartIdx].type) : Pred_NU;
+        MotionVector **mv_lx = NULL;
+        int8* ref_idx_lx = NULL;
+        if(N)
+        {
+            ref_idx_lx = listSuffixFlag ? N->inter->ref_idx_l1    : N->inter->ref_idx_l0;
+            mv_lx      = listSuffixFlag ? N->inter->mv.mv_l1      : N->inter->mv.mv_l0;
+
+            refIdx = ref_idx_lx[mbPartIdx_N];
+            mv_lx_N[0] = mv_lx[mbPartIdx_N][subPartIdx_N][0];
+            mv_lx_N[1] = mv_lx[mbPartIdx_N][subPartIdx_N][1];
+        }
+
+        refIdxLX_N = refIdx;
+        return N;
+    };
+    //初始化 参考周围的 索引和运动矢量
+    A = f_1('A', mbPartIdx_A, subPartIdx_A, refIdxLX_A, mv_lx_A);
+    B = f_1('B', mbPartIdx_B, subPartIdx_B, refIdxLX_B, mv_lx_B);
+    if(current->type == P_Skip && \
+        (!current->is_avaiable(A) || (A->is_interpred() && (A->inter->ref_idx_l0[0] && A->inter->mv.mv_l0[0][0][0] == 0 && A->inter->mv.mv_l0[0][0][1] == 0)) ||\
+         !current->is_avaiable(B) || (B->is_interpred() && (B->inter->ref_idx_l0[0] && B->inter->mv.mv_l0[0][0][0] == 0 && B->inter->mv.mv_l0[0][0][1] == 0)) \
+        )
+    )
+    {// Skip宏块这种情况直接置零返回
+        mv_lX[0][0][0] = 0;
+        mv_lX[0][0][1] = 0;
+        return ;
+    }
+    C = f_1('C', mbPartIdx_C, subPartIdx_C, refIdxLX_C, mv_lx_C);
+    D = f_1('D', mbPartIdx_D, subPartIdx_D, refIdxLX_D, mv_lx_D);
+    uint8_t partWidth = MbPartWidth(current->type);
+    uint8_t partHeight= MbPartHeight(current->type);
+
+    if(!current->is_avaiable(C) || mbPartIdx_C == 0 || subPartIdx_C == 0)
+    {
+        C = D;
+        mbPartIdx_C = mbPartIdx_D;
+        subPartIdx_C = subPartIdx_D;
+        mv_lx_C[0] = mv_lx_D[0];
+        mv_lx_C[1] = mv_lx_D[1];
+    }
+    // 这里只是计算 prediction 的值，所以传入的是mvp
+    if(partWidth == 16 && partHeight == 8 && mbPartIdx == 0 && refIdxLX_B == refIdxLX) 
+    {
+        mv_lX[mbPartIdx][subPartIdx][0] = mv_lx_B[0];
+        mv_lX[mbPartIdx][subPartIdx][1] = mv_lx_B[1];
+    }
+    else if((partWidth == 16 && partHeight == 8 && mbPartIdx == 1 && refIdxLX_A == refIdxLX) || \
+            (partWidth == 8 && partHeight == 16 && mbPartIdx == 0 && refIdxLX_A == refIdxLX)
+    )
+    {
+        mv_lX[mbPartIdx][subPartIdx][0] = mv_lx_A[0];
+        mv_lX[mbPartIdx][subPartIdx][1] = mv_lx_A[1];
+    }
+    else if(partWidth == 8 && partHeight == 16 && mbPartIdx == 1 && refIdxLX_C == refIdxLX)
+    {
+        mv_lX[mbPartIdx][subPartIdx][0] = mv_lx_C[0];
+        mv_lX[mbPartIdx][subPartIdx][1] = mv_lx_C[1];
+    }
+    else //中值处理
+    {
+        if(!current->is_avaiable(B) && !current->is_avaiable(C))
+        {
+            mv_lx_B[0] = mv_lx_C[0] = mv_lx_A[0];
+            mv_lx_B[1] = mv_lx_C[1] = mv_lx_A[1];
+            refIdxLX_B = refIdxLX_C = refIdxLX_A;
+        }
+        if     (refIdxLX_A == refIdxLX && refIdxLX_B != refIdxLX && refIdxLX_C != refIdxLX)
+        {
+            mv_lX[mbPartIdx][subPartIdx][0] = mv_lx_A[0];
+            mv_lX[mbPartIdx][subPartIdx][1] = mv_lx_A[1];
+        }
+        else if(refIdxLX_A != refIdxLX && refIdxLX_B == refIdxLX && refIdxLX_C != refIdxLX)
+        {
+            mv_lX[mbPartIdx][subPartIdx][0] = mv_lx_B[0];
+            mv_lX[mbPartIdx][subPartIdx][1] = mv_lx_B[1];
+        }
+        else if(refIdxLX_A != refIdxLX && refIdxLX_B != refIdxLX && refIdxLX_C == refIdxLX)
+        {
+            mv_lX[mbPartIdx][subPartIdx][0] = mv_lx_C[0];
+            mv_lX[mbPartIdx][subPartIdx][1] = mv_lx_C[1];
+        }
+        else 
+        {
+            mv_lX[mbPartIdx][subPartIdx][0] = Median(mv_lx_A[0], mv_lx_B[0], mv_lx_C[0]);
+            mv_lX[mbPartIdx][subPartIdx][1] = Median(mv_lx_A[1], mv_lx_B[1], mv_lx_C[1]);
+        }
+    }
+    return ;
 }
+
+// 计算 16x16 宏块中的相邻 part
+void neighbour_part_16x16(\
+macroblock *current, int mbPartIdx, int subPartIdx,\
+char direction,\
+macroblock **result, int *rePartIdx, int *reSubIdx
+)
+{
+    int xP, yP;
+    char direction_result;
+    type_macroblock type_cur = current->type;
+    type_submacroblock type_cur_sub;
+    // 如果当前宏块有子块的话，那么计算这个子块的类型
+    if(current->is_interpred() && current->num_mb_part == 4 && !current->mb_skip_flag)
+        type_cur_sub = current->inter->sub[mbPartIdx].type; 
+    // 如果没有的话，那么这个值是不会用到的，所以即便是未分配的值也不要紧
+    neighbour_position_sub(type_cur, type_cur_sub, mbPartIdx, subPartIdx, direction, 16,16, &xP, &yP, &direction_result);
+    *result = trans_macroblock(current, direction_result);
+    // 计算目标宏块内的 块格式索引
+    neighbour_indice_sub(xP, yP, *result, rePartIdx, reSubIdx);
+}
+void neighbour_chroma_4x4(
+macroblock *current, int index,\
+char direction,\
+macroblock **result, int *index_result
+)
+{
+    int xP, yP, xN, yN, xW, yW;
+    char direction_result;
+    InverseRasterScan_chroma4x4(index, &xP, &yP);
+    // 起始坐标偏移
+    trans_adddelta(direction, xP, yP, 16, &xN, &yN);
+    // 偏移坐标转目标宏块代表值
+    target_macroblock(8, xN, yN, &direction_result);
+    // 偏移坐标转目标宏块内起始坐标
+    target_position(8,8, xN, yN, &xW, &yW);
+    // 目标宏块内起始坐标转目标宏块内的 4x4 索引
+    neighbour_indice_luma4x4(xW, yW, index_result);
+    // 目标宏块代表值转真实宏块指针
+    *result = trans_macroblock(current, direction_result);
+    
+}
+
+
+// luma 4x4 相邻块的推导， 包括目标中的坐标，和目标中的 4x4 索引
+
+// 坐标和索引都会返回
+void neighbour_luma_4x4(\
+macroblock *current, int index,\
+char direction,\
+macroblock **result,\
+int *index_result, int *x, int *y
+)
+{
+    
+    int xP, yP, xN, yN, xW, yW;
+    char direction_result;
+    // 4x4 索引转 起始坐标
+    InverseRasterScan_luma4x4(index, &xP, &yP);
+    // 起始坐标偏移
+    trans_adddelta(direction, xP, yP, 16, &xN, &yN);
+    // 偏移坐标转目标宏块代表值
+    target_macroblock(16, xN, yN, &direction_result);
+    // 偏移坐标转目标宏块内起始坐标
+    target_position(16,16, xN, yN, &xW, &yW);
+    // 目标宏块内起始坐标转目标宏块内的 4x4 索引
+    neighbour_indice_luma4x4(xW, xW, index_result);
+    // 目标宏块代表值转真实宏块指针
+    *result = trans_macroblock(current, direction_result);
+    *x = xW;
+    *y = yW;
+}
+// 只计算 4x4 索引
+void neighbour_luma_4x4_indice(\
+macroblock *current, int index,\
+char direction,\
+macroblock **result,\
+int *index_result
+)
+{
+    int xP, yP, xN, yN,xW, yW;
+    char direction_result;
+    // 4x4 索引转 起始坐标
+    InverseRasterScan_luma4x4(index, &xP, &yP);
+    // 起始坐标偏移
+    trans_adddelta(direction, xP, yP, 16, &xN, &yN);
+    // 偏移坐标转目标宏块代表值
+    target_macroblock(16, xN, yN, &direction_result);
+    // 偏移坐标转目标宏块内起始坐标
+    target_position(16,16, xN, yN, &xW, &yW);
+    // 目标宏块内起始坐标转目标宏块内的 4x4 索引
+    neighbour_indice_luma4x4(xW, yW, index_result);
+    // 目标宏块代表值转真实宏块指针
+    *result = trans_macroblock(current, direction_result);
+}
+// 只计算 4x4 坐标
+void neighbour_luma_4x4_position(\
+macroblock *current, int index,\
+char direction,\
+macroblock **result,\
+int *x, int *y
+)
+{
+    int xP, yP, xN, yN,xW, yW;
+    char direction_result;
+    InverseRasterScan_luma4x4(index, &xP, &yP);
+    trans_adddelta(direction, xP, yP, 16, &xN, &yN);
+    target_macroblock(16, xN, yN, &direction_result);
+    target_position(16,16, xN, yN, &xW, &yW);
+    *result = trans_macroblock(current, direction_result);
+    *x = xW;
+    *y = yW;
+}
+
+void neighbour_luma_8x8();
