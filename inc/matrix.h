@@ -1,7 +1,7 @@
 #ifndef MATRIX_H__
 #define MATRIX_H__
 #include "array2d.h"
-#include <iostream>
+#include <ostream>
 
 typedef int matint;
 
@@ -58,8 +58,8 @@ public:
     bool set(int index, int i);
     bool set(int x, int y, int i);
 
-    // 数组自己进行inverse4x4变换
-    void inverse4x4();
+    // 设置一行的值
+    bool setr(int row, int value);
 
     // 从 data 中复制 length 个数据到自己的空间中
     void from(int *data, int length);

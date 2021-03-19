@@ -9,6 +9,13 @@ class block;
 class pixmap;
 class matrix;
 
+#define COEFF_LUMA_DC16 1
+#define COEFF_LUMA_AC16 0
+#define COEFF_LUMA_4x4  0
+#define COEFF_LUMA_8x8  0
+#define COEFF_CHRO_DC   1
+#define COEFF_CHRO_AC   0
+
 //residual 类应该返回一个对象，包含了宏块的残差的所有数据
 //1、宏块残差的类型：这里只有三种，分别是AC+DC     4x4     8x8
 //然后还应该有一个表示coded_block_flag的标志，
@@ -52,10 +59,10 @@ public:
     // 解码残差值
     void DecodeData();
 
-    // luma[0] 16x16 DC
+    // luma[0] 16x16 AC
     //          4x4
     //          8x8
-    // luma[1] 16x16 AC
+    // luma[1] 16x16 DC
     block *luma;
     // chroma[0] chromaDC
     // chroma[1] chromaAC

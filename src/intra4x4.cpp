@@ -4,37 +4,38 @@
 #include "matrix.h"
 #include "parser.h"
 #include <string.h>
+#include "neighbour.h"
 
 // 尽量都采用matrix进行运算
 
 #define GET_NEIGHT_4x4_A() \
-pic->neighbour_4x4block(current, current->intra->predinfo.intra4x4->index, \
+neighbour_luma_4x4_position(current, current->intra->predinfo.intra4x4->index, \
           'A',\
-    &mbAddrA,&predIndex,\
+    &mbAddrA,\
         &c_A,\
         &r_A);\
 if  (mbAddrA)\
-{    mbAddrA->cons[0][r_A + 0][c_A] = I;\
-     mbAddrA->cons[0][r_A + 1][c_A] = J;\
-     mbAddrA->cons[0][r_A + 2][c_A] = K;\
-     mbAddrA->cons[0][r_A + 3][c_A] = L;\
+{   I = mbAddrA->cons[0][r_A + 0][c_A];\
+    J = mbAddrA->cons[0][r_A + 1][c_A];\
+    K = mbAddrA->cons[0][r_A + 2][c_A];\
+    L = mbAddrA->cons[0][r_A + 3][c_A];\
 };
 #define GET_NEIGHT_4x4_B() \
-pic->neighbour_4x4block(current, current->intra->predinfo.intra4x4->index, \
+neighbour_luma_4x4_position(current, current->intra->predinfo.intra4x4->index, \
           'B',\
-    &mbAddrB,&predIndex,\
+    &mbAddrB,\
         &c_B,\
         &r_B);\
 if  (mbAddrB)\
-{    mbAddrB->cons[0][r_B][c_B + 0] =  A;\
-     mbAddrB->cons[0][r_B][c_B + 1] =  B;\
-     mbAddrB->cons[0][r_B][c_B + 2] =  C;\
-     mbAddrB->cons[0][r_B][c_B + 3] =  D;\
+{   A = mbAddrB->cons[0][r_B][c_B + 0];\
+    B = mbAddrB->cons[0][r_B][c_B + 1];\
+    C = mbAddrB->cons[0][r_B][c_B + 2];\
+    D = mbAddrB->cons[0][r_B][c_B + 3];\
 };
 #define GET_NEIGHT_4x4_C() \
-pic->neighbour_4x4block(current, current->intra->predinfo.intra4x4->index,\
+neighbour_luma_4x4_position(current, current->intra->predinfo.intra4x4->index, \
           'C',\
-    &mbAddrC,&predIndex,\
+    &mbAddrC,\
         &c_C,\
         &r_C);\
 if(current->is_avaiable(mbAddrC))\
@@ -44,10 +45,10 @@ if(current->is_avaiable(mbAddrC))\
         E=F=G=H=D;\
     else\
     {\
-        mbAddrC->cons[0][r_C][c_C + 0] =  E;\
-        mbAddrC->cons[0][r_C][c_C + 1] =  F;\
-        mbAddrC->cons[0][r_C][c_C + 2] =  G;\
-        mbAddrC->cons[0][r_C][c_C + 3] =  H;\
+        E = mbAddrC->cons[0][r_C][c_C + 0];\
+        F = mbAddrC->cons[0][r_C][c_C + 1];\
+        G = mbAddrC->cons[0][r_C][c_C + 2];\
+        H = mbAddrC->cons[0][r_C][c_C + 3];\
     }\
 }\
 else \
@@ -55,13 +56,13 @@ else \
 ;
 
 #define GET_NEIGHT_4x4_D() \
-pic->neighbour_4x4block(current, current->intra->predinfo.intra4x4->index,\
+neighbour_luma_4x4_position(current, current->intra->predinfo.intra4x4->index, \
           'D',\
-    &mbAddrD,&predIndex,\
+    &mbAddrD,\
         &c_D,\
         &r_D);\
 if  (mbAddrD)\
-{    mbAddrD->cons[0][r_D + 3][c_D + 3] = M;\
+{    M = mbAddrD->cons[0][r_D][c_D];\
 };
 
 #define get_neighbour_4x4_A GET_NEIGHT_4x4_A
@@ -70,7 +71,7 @@ if  (mbAddrD)\
 #define get_neighbour_4x4_D GET_NEIGHT_4x4_D
 
 // 从 2 个已有的像素来预测当前像素
-#define two_tap_filter(a, b)    ((a + b) >> 2)
+#define two_tap_filter(a, b)    ((a + b + 1) >> 1)
 // 从 3 个已有的像素来预测当前像素
 #define thr_tap_filter(a, b, c) ((a + 2 * b + c + 2) >> 2)
 
@@ -106,7 +107,7 @@ if  (mbAddrD)\
    3|K|A B C D|
    5|L|A B C D|  
 */
-void Prediction_Intra4x4_V                   (macroblock* current)
+void Prediction_Intra4x4_V                   (macroblock* current, matrix *pred)
 {    
     int predIndex = 0;
 
@@ -123,10 +124,10 @@ void Prediction_Intra4x4_V                   (macroblock* current)
     };
 
     // 按列修改为按行复制
-    memcpy(current->pred[0][0], re, 4 * sizeof(int));
-    memcpy(current->pred[0][1], re, 4 * sizeof(int));
-    memcpy(current->pred[0][2], re, 4 * sizeof(int));
-    memcpy(current->pred[0][3], re, 4 * sizeof(int));
+    memcpy(pred[0][0], re, 4 * sizeof(int));
+    memcpy(pred[0][1], re, 4 * sizeof(int));
+    memcpy(pred[0][2], re, 4 * sizeof(int));
+    memcpy(pred[0][3], re, 4 * sizeof(int));
 
     // current->pred->setl(re, 0, 4);
     // current->pred->setl(re, 1, 4);
@@ -148,7 +149,7 @@ void Prediction_Intra4x4_V                   (macroblock* current)
    3|K|K K K K|
    5|L|L L L L|  
 */
-void Prediction_Intra4x4_H                   (macroblock* current)
+void Prediction_Intra4x4_H                   (macroblock* current, matrix *pred)
 {    
     int predIndex = 0;
 
@@ -167,6 +168,11 @@ void Prediction_Intra4x4_H                   (macroblock* current)
         (int)K, 
         (int)L
     };
+    for (int c = 0; c < 4; c++) pred[0][0][c] = I;
+    for (int c = 0; c < 4; c++) pred[0][1][c] = J;
+    for (int c = 0; c < 4; c++) pred[0][2][c] = K;
+    for (int c = 0; c < 4; c++) pred[0][3][c] = L;
+    
     // current->pred->setr(re + 0, 0);
     // current->pred->setr(re + 1, 1);
     // current->pred->setr(re + 2, 2);
@@ -183,7 +189,7 @@ void Prediction_Intra4x4_H                   (macroblock* current)
    3|K|       |
    5|L|       |  
 */
-void Prediction_Intra4x4_DC                  (macroblock* current, parser *pa)
+void Prediction_Intra4x4_DC                  (macroblock* current, matrix *pred, int BitDepthY)
 {    
 
     int predIndex = 0;
@@ -199,16 +205,16 @@ void Prediction_Intra4x4_DC                  (macroblock* current, parser *pa)
     get_neighbour_4x4_B();
     
     int value = 0;
-    if(!mbAddrB && !mbAddrA)
+    if(mbAddrB && mbAddrA)
         value = (int)(((A + B + C + D + I + J + K + L + 4)) >> 3);
     else if(!mbAddrB && mbAddrA)
         value = (int)(((I + J + K + L + 2)) >> 2);
     else if(mbAddrB && !mbAddrA)
         value = (int)(((A + B + C + D + 2)) >> 2);
     else 
-        value = (int)(1 << (pa->pV->BitDepthY - 1));
+        value = (int)(1 << (BitDepthY - 1));
 
-    current->pred[0] = value;
+    pred[0] = value;
 }
 /*   
     for the Intra_4x4
@@ -220,9 +226,8 @@ void Prediction_Intra4x4_DC                  (macroblock* current, parser *pa)
    3|K|/ / / /|/          | /
    5|L|/ / / /|  45 degree|/___
 */
-void Prediction_Intra4x4_Diagonal_Down_Left  (macroblock* current)
+void Prediction_Intra4x4_Diagonal_Down_Left  (macroblock* current, matrix *pred)
 {    
-    pixmap res;
 
     int predIndex = 0;
     uint8     A = 0,     B = 0,     C = 0,     D = 0;
@@ -244,10 +249,10 @@ void Prediction_Intra4x4_Diagonal_Down_Left  (macroblock* current)
     }
     p[6] = (int)((pr[6] + 3 * pr[7]) >> 2);
 
-    memcpy(current->pred[0][0], p + 0, 4 * sizeof(int));
-    memcpy(current->pred[0][1], p + 1, 4 * sizeof(int));
-    memcpy(current->pred[0][2], p + 2, 4 * sizeof(int));
-    memcpy(current->pred[0][3], p + 3, 4 * sizeof(int));
+    memcpy(pred[0][0], p + 0, 4 * sizeof(int));
+    memcpy(pred[0][1], p + 1, 4 * sizeof(int));
+    memcpy(pred[0][2], p + 2, 4 * sizeof(int));
+    memcpy(pred[0][3], p + 3, 4 * sizeof(int));
 }
 /*
     for the Intra_4x4
@@ -259,14 +264,13 @@ void Prediction_Intra4x4_Diagonal_Down_Left  (macroblock* current)
    3|K|\ \ \ \|\          |\
    5|L|\ \ \ \|  45 degree|_\__
 */
-void Prediction_Intra4x4_Diagonal_Down_Right (macroblock* current)
+void Prediction_Intra4x4_Diagonal_Down_Right (macroblock* current, matrix *pred)
 {
-    pixmap res;
     int predIndex = 0;
     uint8     A = 0,     B = 0,     C = 0,     D = 0;
     int     r_B = 0,     c_B = 0;
-    uint8     E = 0,     F = 0,     G = 0,     H = 0;
-    int     r_C = 0,     c_C = 0;
+    
+
     uint8     I = 0,     J = 0,     K = 0,     L = 0;
     int     r_A = 0,     c_A = 0;   
     uint8     M = 0;
@@ -285,23 +289,22 @@ void Prediction_Intra4x4_Diagonal_Down_Right (macroblock* current)
     int p[7];
     for (int8 i = 0; i < 7; i++)
     {
-        p[i] = (int)(pr[i] + 2 * pr[i + 1] + pr[i + 2] + 2 ) >> 2;
+        p[i] = (int)thr_tap_filter(pr[i], pr[i + 1], pr[i + 2]);
     }
     
-    memcpy(current->pred[0][0], p + 0, 4 * sizeof(int));
-    memcpy(current->pred[0][1], p + 1, 4 * sizeof(int));
-    memcpy(current->pred[0][2], p + 2, 4 * sizeof(int));
-    memcpy(current->pred[0][3], p + 3, 4 * sizeof(int));
+    memcpy(pred[0][0], p + 3, 4 * sizeof(int));
+    memcpy(pred[0][1], p + 2, 4 * sizeof(int));
+    memcpy(pred[0][2], p + 1, 4 * sizeof(int));
+    memcpy(pred[0][3], p + 0, 4 * sizeof(int));
  
 }
-void Prediction_Intra4x4_V_Right             (macroblock* current)
+void Prediction_Intra4x4_V_Right             (macroblock* current, matrix *pred)
 {    
-    pixmap res;
     int predIndex = 0;
     uint8     A = 0,     B = 0,     C = 0,     D = 0;
     int     r_B = 0,     c_B = 0;
-    uint8     E = 0,     F = 0,     G = 0,     H = 0;
-    int     r_C = 0,     c_C = 0;
+    
+
     uint8     I = 0,     J = 0,     K = 0,     L = 0;
     int     r_A = 0,     c_A = 0;   
     uint8     M = 0;
@@ -341,14 +344,13 @@ void Prediction_Intra4x4_V_Right             (macroblock* current)
     p[3][2] = p[1][1];
     p[3][3] = p[1][2];
 
-    memcpy(current->pred[0][0], p[0], 4 * sizeof(int));
-    memcpy(current->pred[0][1], p[1], 4 * sizeof(int));
-    memcpy(current->pred[0][2], p[2], 4 * sizeof(int));
-    memcpy(current->pred[0][3], p[3], 4 * sizeof(int));
+    memcpy(pred[0][0], p[0], 4 * sizeof(int));
+    memcpy(pred[0][1], p[1], 4 * sizeof(int));
+    memcpy(pred[0][2], p[2], 4 * sizeof(int));
+    memcpy(pred[0][3], p[3], 4 * sizeof(int));
 }
-void Prediction_Intra4x4_H_Down              (macroblock* current)
+void Prediction_Intra4x4_H_Down              (macroblock* current, matrix *pred)
 {
-    pixmap res;
     int predIndex = 0;
     uint8     A = 0,     B = 0,     C = 0,     D = 0;
     int     r_B = 0,     c_B = 0;
@@ -391,14 +393,13 @@ void Prediction_Intra4x4_H_Down              (macroblock* current)
     p[3][2] = p[2][0];
     p[3][3] = p[2][1];
 
-    memcpy(current->pred[0][0], p[0], 4 * sizeof(int));
-    memcpy(current->pred[0][1], p[1], 4 * sizeof(int));
-    memcpy(current->pred[0][2], p[2], 4 * sizeof(int));
-    memcpy(current->pred[0][3], p[3], 4 * sizeof(int));
+    memcpy(pred[0][0], p[0], 4 * sizeof(int));
+    memcpy(pred[0][1], p[1], 4 * sizeof(int));
+    memcpy(pred[0][2], p[2], 4 * sizeof(int));
+    memcpy(pred[0][3], p[3], 4 * sizeof(int));
 }
-void Prediction_Intra4x4_V_Left              (macroblock* current)
+void Prediction_Intra4x4_V_Left              (macroblock* current, matrix *pred)
 {
-    pixmap res;
     int predIndex = 0;
     uint8     A = 0,     B = 0,     C = 0,     D = 0;
     int     r_B = 0,     c_B = 0;
@@ -421,14 +422,13 @@ void Prediction_Intra4x4_V_Left              (macroblock* current)
         pe_13[i] = (int)thr_tap_filter(pr[i], pr[i + 1], pr[i + 2]);
     }
     
-    memcpy(current->pred[0][0], pe_02 + 0, 4 * sizeof(int));
-    memcpy(current->pred[0][1], pe_13 + 0, 4 * sizeof(int));
-    memcpy(current->pred[0][2], pe_02 + 1, 4 * sizeof(int));
-    memcpy(current->pred[0][3], pe_13 + 1, 4 * sizeof(int));
+    memcpy(pred[0][0], pe_02 + 0, 4 * sizeof(int));
+    memcpy(pred[0][1], pe_13 + 0, 4 * sizeof(int));
+    memcpy(pred[0][2], pe_02 + 1, 4 * sizeof(int));
+    memcpy(pred[0][3], pe_13 + 1, 4 * sizeof(int));
 }
-void Prediction_Intra4x4_H_Up                (macroblock* current)
+void Prediction_Intra4x4_H_Up                (macroblock* current, matrix *pred)
 {
-    pixmap res;
     int predIndex = 0;
     uint8     I = 0,     J = 0,     K = 0,     L = 0;
     int     r_A = 0,     c_A = 0;   
@@ -442,8 +442,8 @@ void Prediction_Intra4x4_H_Up                (macroblock* current)
 
     p[0][0] = (int)two_tap_filter(pr[2], pr[3]);
     p[0][1] = (int)thr_tap_filter(pr[1], pr[2], pr[3]);
-    p[0][3] = (int)two_tap_filter(pr[1], pr[2]);
-    p[0][4] = (int)thr_tap_filter(pr[0], pr[1], pr[2]);
+    p[0][2] = (int)two_tap_filter(pr[1], pr[2]);
+    p[0][3] = (int)thr_tap_filter(pr[0], pr[1], pr[2]);
 
     p[1][0] = p[0][2];
     p[1][1] = p[0][3];
@@ -461,8 +461,8 @@ void Prediction_Intra4x4_H_Up                (macroblock* current)
     }
     
     
-    memcpy(current->pred[0][0], p[0], 4 * sizeof(int));
-    memcpy(current->pred[0][1], p[1], 4 * sizeof(int));
-    memcpy(current->pred[0][2], p[2], 4 * sizeof(int));
-    memcpy(current->pred[0][3], p[3], 4 * sizeof(int));
+    memcpy(pred[0][0], p[0], 4 * sizeof(int));
+    memcpy(pred[0][1], p[1], 4 * sizeof(int));
+    memcpy(pred[0][2], p[2], 4 * sizeof(int));
+    memcpy(pred[0][3], p[3], 4 * sizeof(int));
 }

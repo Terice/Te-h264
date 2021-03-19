@@ -2,6 +2,8 @@
 
 #include <iostream>
 #include <cmath>
+#include "terror.h"
+#include "gvars.h"
 
 #include "parser.h"
 #include "decoder.h"
@@ -35,12 +37,13 @@ bool nal::decode()
         case NAL_TYPE_PPS   :decode_PPS();break;
         case NAL_TYPE_SPS   :decode_SPS();break;
         case NAL_TYPE_SEI   :decode_SEI();break;
-        default:std::cout << ">> nal: no fn to deocde type: [" << nal_unit_type << "]" << std::endl;
+        // default:std::cout << ">> nal: no fn to deocde type: [" << (int)nal_unit_type << "]" << std::endl;
     }
     return true;
 }
 void nal::decode_SPS()
 {
+    // terr.temsg(">> nal: sps");
     SPS *s = new SPS(pa);
     this->data = s;
     // 先解码参数集，
@@ -48,25 +51,10 @@ void nal::decode_SPS()
     // 然后再挂参数
     pa->update_ps(s);// 把解码参数指针挂上去
 
-    // 注意以下过程需要改进放在上面的update_ps函数中去
-    // 把一些SPS已经能够解析的传送给parser
-    pa->pV->ChromaArrayType     = s->separate_colour_plane_flag == 0 ? s->chroma_format_idc : 0;
-    pa->pV->BitDepthY           = s->bit_depth_luma_minus8 + 8;
-    pa->pV->QpBdOffsetY         = s->bit_depth_luma_minus8 * 6;
-    pa->pV->BitDepthC           = s->bit_depth_chroma_minus8 + 8;
-    pa->pV->QpBdOffsetC         = s->bit_depth_chroma_minus8 * 6;
-    pa->pV->MaxFrameNum         = (uint32_t)pow(2, s->log2_max_frame_num_minus4 + 4);
-    pa->pV->PicWidthInMbs       = s->pic_width_in_mbs_minus1 + 1;
-    pa->pV->PicHeightInMapUnits = s->pic_height_in_map_units_minus1 + 1;
-    pa->pV->PicHeightInMbs      = s->pic_height_in_map_units_minus1 + 1;
-    pa->pV->FrameHeightInMbs    = ( 2 - s->frame_mbs_only_flag ) * pa->pV->PicHeightInMapUnits;
-    pa->pV->PicSizeInMapUnits   = pa->pV->PicWidthInMbs *pa->pV->PicHeightInMapUnits;
-    
-    pa->pV->SubWidthC           = (s->chroma_format_idc == 1 || s->chroma_format_idc == 2) ? 2 : 1;
-    pa->pV->SubHeightC          = (s->chroma_format_idc == 1) ? 2 : 1;
 }
 void nal::decode_PPS()
 {
+    // terr.temsg(">> nal: pps");
     PPS *p = new PPS(pa);
     this->data = p;
     p->decode(); // 先解码，
@@ -76,6 +64,7 @@ void nal::decode_PPS()
 
 void nal::decode_PIC()
 {
+    // terr.temsg(">> nal: pic");
     // 对于普通PIC来说需要控制一下内存，
     // 丢弃掉那些不需要的缓冲帧
     de->ctrl_Memory();
@@ -85,9 +74,13 @@ void nal::decode_PIC()
     // 所以还需要一个decoder对象
     picture* pic = new picture(pa, de);
     this->data = pic;
-    
-    pic->deocde();
 
+    // 设置解码器的当前图像，用于MMOC中的CurPicNum
+    de->set_CurrentPic(pic);
+    pic->deocde();
+    // 由 pic 来通知解码控制器 添加一个解码完成的 pic
+    de->add_DecodedPic(pic);
+    de->out_DecodedPic();
 
     //解码完毕需要对当前的pic进行标记，
     //在下一次解码的时候会初始化，重排序和修改，而不是这里
@@ -97,6 +90,7 @@ void nal::decode_PIC()
 
 void nal::decode_IDR()
 {
+    // terr.temsg(">> nal: idr");
     // 对于IDR图像来说
     // 这里首先有一步IDR控制
     // 由于遇到IDR，缓存空间是必定全部清除的
@@ -109,13 +103,18 @@ void nal::decode_IDR()
     // 不过多一步设置IDR标志
     pic->IdrPicFlag = true;
 
+    // 设置解码器的当前图像，用于MMOC中的CurPicNum
+    de->set_CurrentPic(pic);
     pic->deocde();
+    // 由 pic 来通知解码控制器 添加一个解码完成的 pic
+    de->add_DecodedPic(pic);
+    de->out_DecodedPic();
 
     pic->refidc(nal_ref_idc);
 }
-
 void nal::decode_SEI()
 {
+    // terr.temsg(">> nal: sei");
     sei* se = new sei(pa);
 
     se->decode();

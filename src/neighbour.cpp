@@ -160,7 +160,8 @@ void neighbour_motionvector(
     int mbPartIdx_C = -1;int subPartIdx_C = -1;int refIdxLX_C = -1;MotionVector mv_lx_C;
     int mbPartIdx_D = -1;int subPartIdx_D = -1;int refIdxLX_D = -1;MotionVector mv_lx_D;
 
-
+    // if(current->pos.x == 23 && current->pos.y == 0 && current->idx_slice == 1)
+    //     int a = 0;
     
     predmode_mb_part Pred_LX = listSuffixFlag ? Pred_L1 : Pred_L0;
     int8* ref_idx_lx = listSuffixFlag == 1 ? current->inter->ref_idx_l1 : current->inter->ref_idx_l0;
@@ -168,9 +169,8 @@ void neighbour_motionvector(
 
     auto f_1 = [&current, listSuffixFlag, mbPartIdx, subPartIdx, Pred_LX](char direction, int& mbPartIdx_N, int& subPartIdx_N, int& refIdxLX_N, int mv_lx_N[2])->macroblock*
     {
-        
         macroblock* N ;//=  get_PartNeighbour(current, direction, 0x010, mbPartIdx, subPartIdx, mbPartIdx_N, subPartIdx_N);
-        neighbour_part_16x16(current, direction, mbPartIdx, subPartIdx, &N, &mbPartIdx_N, &subPartIdx_N);
+        neighbour_part_16x16(current, mbPartIdx, subPartIdx, direction, &N, &mbPartIdx_N, &subPartIdx_N);
         int refIdx = -1;
         // 如果 N 不可用 || 是帧内 || 不预测
         // 那么就直接返回
@@ -180,11 +180,13 @@ void neighbour_motionvector(
             refIdx = -1;
             mv_lx_N[0] = 0;
             mv_lx_N[1] = 0;
+            refIdxLX_N = refIdx;
+            return N;
         }
 
         predmode_mb_part premode_cur = MbPartPredMode(current->type, mbPartIdx);
-        predmode_mb_part premode_cur_sub = current->num_mb_part == 4 ? \
-                                            SubMbPartPredMode(current->inter->sub[mbPartIdx].type) : Pred_NU;
+        // predmode_mb_part premode_cur_sub = current->num_mb_part == 4 ? \
+        //                                     SubMbPartPredMode(current->inter->sub[mbPartIdx].type) : Pred_NU;
         MotionVector **mv_lx = NULL;
         int8* ref_idx_lx = NULL;
         if(N)
@@ -218,7 +220,7 @@ void neighbour_motionvector(
     uint8_t partWidth = MbPartWidth(current->type);
     uint8_t partHeight= MbPartHeight(current->type);
 
-    if(!current->is_avaiable(C) || mbPartIdx_C == 0 || subPartIdx_C == 0)
+    if(!current->is_avaiable(C) || mbPartIdx_C == -1 || subPartIdx_C == -1)
     {
         C = D;
         mbPartIdx_C = mbPartIdx_D;
@@ -381,7 +383,7 @@ int *x, int *y
     int xP, yP, xN, yN,xW, yW;
     char direction_result;
     InverseRasterScan_luma4x4(index, &xP, &yP);
-    trans_adddelta(direction, xP, yP, 16, &xN, &yN);
+    trans_adddelta(direction, xP, yP, 4, &xN, &yN);
     target_macroblock(16, xN, yN, &direction_result);
     target_position(16,16, xN, yN, &xW, &yW);
     *result = trans_macroblock(current, direction_result);

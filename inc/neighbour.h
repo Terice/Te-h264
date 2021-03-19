@@ -8,6 +8,13 @@ void neighbour_macroblock(
     macroblock **result
 );
 
+/**
+ * @param current 当前宏块
+ * @param mbPartIdx 块索引
+ * @param subPartIdx 子块索引
+ * @param direction 运动矢量的方向，是mv_l1还是mv_l0
+ * @param mv_lx 对应方向上的运动矢量
+ */
 void neighbour_motionvector(
     macroblock *current, int mbPartIdx, int subPartIdx,\
     int direction, MotionVector **mv_lx

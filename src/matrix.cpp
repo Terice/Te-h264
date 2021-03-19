@@ -12,26 +12,6 @@ static unsigned long int datapkg_cout = 0;
 // 采用的是类似于文件硬链接的方式来处理数据包
 // 从而来解决内存泄漏的问题
 
-void matrix::from(int *data, int length)
-{
-    memcpy(this->data, data, length * sizeof(int));
-}
-void matrix::from(int *data, int start, int length)
-{
-    memcpy(this->data + start, data, length * sizeof(int));
-}
-static void decrease(DataPkg* pkg)
-{
-    if(!pkg) return;
-
-    pkg->user--;
-    if(pkg->user <= 0) 
-    {
-        delete[] pkg->pointer;
-        delete pkg;
-        // std::cout << " del pkg : cur: " << --datapkg_cout << std::endl;
-    }
-}
 static void increase(DataPkg* pkg)
 {
     if(!pkg) return;
@@ -42,9 +22,7 @@ static DataPkg* newpkg(int length)
 
     DataPkg *pkg = new DataPkg;
     pkg->pointer = new int[length];
-
     // std::cout << " new pkg : cur: " << ++datapkg_cout << std::endl;
-
     pkg->user = 0;
     pkg->length = length;
 
@@ -52,12 +30,19 @@ static DataPkg* newpkg(int length)
 }
 static void delpkg(DataPkg* pkg)
 {
-    if(pkg->user <= 0) 
+    if(pkg->user == 0) 
     {
         delete[] pkg->pointer;
         delete pkg;
         // std::cout << " del pkg : cur: " << --datapkg_cout << std::endl;
     }
+}
+static void decrease(DataPkg* pkg)
+{
+    if(!pkg) return;
+
+    pkg->user--;
+    delpkg(pkg);
 }
 
 
@@ -88,9 +73,9 @@ std::ostream&  operator<<(std::ostream& out ,const matrix& ma)
 }
 matrix::matrix(const matrix& r)
 {
-    decrease(data);
-
+    decrease(data);// 丢掉之前自己的包
     data = r.data;
+    increase(data);// 这个包的使用者加一
     this->w = r.w;
     this->h = r.h;
     
@@ -130,7 +115,6 @@ matrix::matrix(int w, int h)
 matrix::~matrix()
 {
     decrease(data);
-    delpkg(data);
 }
 
 
@@ -144,7 +128,7 @@ void matrix::operator=(int value)
     }
     
 }
-int* matrix::operator[](int i) const
+inline int* matrix::operator[](int i) const
 {
     return i >= h ? NULL : data->pointer + i * w;
 }
@@ -201,9 +185,9 @@ matrix matrix::operator+(const matrix& r)
     matrix result(r.w, r.h, 0);
 
 
-    for (uint i = 0; i < this->w; i++)
+    for (uint i = 0; i < this->h; i++)
     {
-        for (uint j = 0; j < this->h; j++)
+        for (uint j = 0; j < this->w; j++)
         {result[i][j] = (*this)[i][j] + r[i][j];}
     }
     return result;
@@ -260,4 +244,21 @@ bool matrix::set(int x, int y, int i)
 {
     (*this)[x][y] = i;
     return true;
+}
+bool matrix::setr(int row, int value)
+{
+    for (int c = 0; c < this->w; c++)
+    {
+        (*this)[row][c] = value;
+    }
+}
+void matrix::from(int *data, int length)
+{
+    memcpy(this->data->pointer, data, length * sizeof(int));
+    this->data->length = length;
+}
+void matrix::from(int *data, int start, int length)
+{
+    memcpy(this->data->pointer + start, data, length * sizeof(int));
+    this->data->length = start + length;
 }

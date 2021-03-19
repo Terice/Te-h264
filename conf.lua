@@ -35,6 +35,8 @@ DE_RESIDUAL_TRANSCOEFF           = 0
 --宏块信息和所有打印的控制
 DE_MB                            = 0
 
+--
+DE_PICTURE_MBCOMPLETE            = 0
 --残差
 --打印 Y Cb Cr 的残差
 
@@ -61,21 +63,21 @@ DE_PREDICTION_RESULT_Cr          = 0
 DE_CONSPIC_RESULT                = 0
 
 DE_CONSPIC_RESULT_Y              = 0
-DE_CONSPIC_RESULT_Cb             = 1
-DE_CONSPIC_RESULT_Cr             = 1
+DE_CONSPIC_RESULT_Cb             = 0
+DE_CONSPIC_RESULT_Cr             = 0
 
 --运动矢量
 DE_INTER_MOVEVECTOR              = 0
 --最后的图像字符画
-DE_PIC_TERMINATECHAR             = 0
+DE_PIC_TERMINATECHAR             = 1
 
 --所有的和时间有关的打印
 DE_TIMER                         = 0
 --NAL信息的打印
 DE_NAL_INFO                      = 0
 
-DE_CONTROL_ALL                   = 0
-if(DE_CONTROL_ALL == 1) then
+DE_CONTROL_ALL                   = 1
+if(DE_CONTROL_ALL == 0) then
     print(">>conf:")
     print("         DE_CABAC_STATE          :"..DE_CABAC_STATE          ) 
     print("         DE_CABAC_BIN            :"..DE_CABAC_BIN            ) 
@@ -132,6 +134,8 @@ DE_RESIDUAL_CABAC_RESULT,
 DE_RESIDUAL_TRANSCOEFF, 
 
 DE_MB,
+
+DE_PICTURE_MBCOMPLETE,
 
 DE_RESIDUAL_RESULT_Y, 
 DE_RESIDUAL_RESULT_Cb, 

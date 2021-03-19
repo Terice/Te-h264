@@ -52,7 +52,7 @@ public:
     picture* get_LastRef(){return list_Ref.size()>0?list_Ref.back():NULL;}
 
     picture* get_CurrentPic(){return curPIC;};
-    void     set_CurSlcie(slice* to){curSLI = to;}
+    void     set_CurrentSlice(slice* to){curSLI = to;}
     void     set_CurrentPic(picture* pic){curPIC = pic;};
     
     //解码队列

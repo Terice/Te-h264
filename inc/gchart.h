@@ -1394,16 +1394,17 @@ static const uint8 ctxIdxBlockCatOffsetOfctxBlockCat[4][14] = {
     {0, 15, 29, 44, 47, 0, 0, 15, 29, 0, 0, 15, 29, 0},
     {0, 10, 20, 30, 39, 0, 0, 10, 20, 0, 0, 10, 20, 0}
 };
-// 4x4 逆扫描和 zig-zag 扫描的索引互换
+// 完成十六分块 一维-逆扫描 的索引互换
 static const uint8 block4x4Index[16] = {
     0 , 1 , 4 , 5 ,
     2 , 3 , 6 , 7 ,
     8 , 9 , 12, 13,
     10, 11, 14, 15
 };
-static const uint8 block8x8Index[2][2] = {
-    {0, 1},
-    {2, 3}
+// 完成四分块 一维-逆扫描 的索引互换
+static const uint8 block8x8Index[4] = {
+    0, 1,
+    2, 3
 };
 
 

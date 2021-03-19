@@ -20,6 +20,10 @@
 #include "parser.h"
 #include "decoder.h"
 
+#include "neighbour.h"
+
+static int cabac_stop[4] = {76, 1, 36, 490};
+
 int cabac::cread_ae(uint32 syntax)
 {
     //result意思是计算出来的值
@@ -34,16 +38,13 @@ int cabac::cread_ae(uint32 syntax)
     }
     result = Decode(syntax);
     //后处理
-    // 这句话写在读取mb_type 里面去了，因为在不同的 slice 中 I_PCM 的值是不一样的，所以放在这里也不对
+    // 这句话写在读取 mb_type 里面去了，因为在不同的 slice 中 I_PCM 的值是不一样的，所以放在这里也不对
     // if(syntax == 0x00022000U && (type_macroblock)result == I_PCM) {init_engine();}
 
     if(terr.cabac_result_ae())
     {
         int a = syntax >> 12 & 0xFF;
-        // if((a >= 0x61 && a <= 0x64 ) || (a == 0x41 || a == 0x43))
-        printf(">>cabac: result of |%8x| is : |%5d|\n", syntax, result);
-        // else
-        // printf(">>cabac: result of |%8d| is : |%5d|\n", syntax, result);
+        printf(">>cabac: result of |%8x| is : |%5d|\n", a, result);
     }
 
     return result;
@@ -52,6 +53,9 @@ int cabac::cread_ae(uint32 syntax)
 //
 uint32 cabac::Decode(uint32 syntaxelements)
 { 
+    macroblock* cur = this->pa->cur_slice->curMB;
+    
+    
     uint32 result = 0;
     uint32 syntax;
     syntax = ((syntaxelements & 0x000FF000U)>> 12);
@@ -72,7 +76,7 @@ uint32 cabac::Decode(uint32 syntaxelements)
     else if(syntax == 0x62U) result = read_significant_coeff_flag      (syntaxelements);
     else if(syntax == 0x63U) result = read_last_significant_coeff_flag (syntaxelements);
     else if(syntax == 0x64U) result = read_coeff_abs_level_minus1      (syntaxelements);
-    else if(syntax == 0x65U) result = decode_bypass(); 
+    else if(syntax == 0x65U) result = decode_bypass(); // 
     // 这个实际上是276 ，但是2那一位在上面的句法中又有别的用处，所以这里只取 76 ，其他的避开 76 就好了
     else if(syntax == 0x76U) result = decode_finaly();
     else ;
@@ -94,21 +98,22 @@ int cabac::decode_unary(uint16 ctx, int offset)
     }
     else
         return 0;
-    
 }
 int cabac::decode_uegk(int k)
 {
     int result = 0;
     int suf = 0;
+    int sufk = 0 + k;
     while(decode_bypass())
     {
         result <<= 1;// 先左移一位把最低位空出来
         result |= 1;// 还在循环就说明当前解码位是 1
+        sufk++;
     }
-    result << k; // 后缀的长度就是由 k 指定的，需要左移相应的位数说明是前缀
-    while(k--) // k 判定结束之后正好自减，得到后缀的bit位需要左移的位数
+    result <<= k; // 后缀的长度就是由 k 指定的，需要左移相应的位数说明是前缀
+    while(sufk--) // k 判定结束之后正好自减，得到后缀的bit位需要左移的位数
     {
-        suf |= (decode_bypass() << k);
+        suf |= (decode_bypass() << sufk);
     }
     return result + suf; // 两者是相加的关系而不是与运算的关系
 }
@@ -129,6 +134,9 @@ bool cabac::DecodeValueUsingCtxIdx(uint16 ctxIdx_value, uint8 bypassFlag_value)
             printf("         codIOffset: %5d\t", codIOffset);
             printf("         -------------------result : %d\n", binVal);
         }
+
+            if(codIOffset == 50)
+            int a = 0;
     }
     else 
     {
@@ -146,6 +154,8 @@ bool cabac::DecodeValueUsingCtxIdx(uint16 ctxIdx_value, uint8 bypassFlag_value)
         }
         else//decode decision
         {
+
+
             uint16 qCodIRangeIdx = (codIRange >> 6) & 3; // codIRange是一个9位的值，去掉低6位，高3位用来计算小区间的长度。
             uint16 codIRangeLPS = rangeTabLPS[pStateIdx][qCodIRangeIdx];
             if(terr.cabac_state_running())     
@@ -161,8 +171,17 @@ bool cabac::DecodeValueUsingCtxIdx(uint16 ctxIdx_value, uint8 bypassFlag_value)
                 // printf("MPS(%3d)\n", transIdxMPS[pStateIdx]);
                 // else
                 // printf("LPS(%3d)\n", transIdxLPS[pStateIdx]);
-
             }
+
+            if(ctxIdx_value == cabac_stop[0]\
+              && codIOffset == cabac_stop[1]\
+               && pStateIdx == cabac_stop[2] \
+               && codIRange == cabac_stop[3])
+            int a = 0;
+
+
+
+
             codIRange = codIRange - codIRangeLPS;// 得到小概率区间的起始值， 也就是得到当前大小概率区间的分界值
             // 解码区间[[大概率区间],[小概率区间]]
             if(codIOffset >= codIRange) // 当前的数值落在小区间内（大于大概率符号区间的长度），说明是LPS
@@ -280,10 +299,11 @@ uint16 cabac::read_mb_type()
     type_slice slice_type = lifeTimeSlice->type;
     macroblock* cur = lifeTimeSlice->curMB;
     picture* p = pic;
-    uint8 ctxIdxOffset = 0;
+    ctxIdxOffset = 0;
 
     auto f = [p](macroblock* cur, char direction, uint16 ctxIdxOffset)->uint8_t{
-        macroblock* N = p->neighbour_macroblock(cur, direction);
+        macroblock* N ;
+        neighbour_macroblock(cur, direction, &N);
         uint8 condTermFlagN = 0;
         if(!N || !cur->is_avaiable(N)) condTermFlagN = 0;
         else
@@ -324,10 +344,15 @@ uint16 cabac::read_mb_type()
         // I 帧的上下文索引 [3,10]
         int condTermFlagA, condTermFlagB;
         int binIdx; int predmode;
+        if(!cur->neighbour.A.avaiable) condTermFlagA = 0;
+        else condTermFlagA = cur->neighbour.A.pointer->type == I_NxN ? 0 : 1;
+
+        if(!cur->neighbour.B.avaiable) condTermFlagB = 0;
+        else condTermFlagB = cur->neighbour.B.pointer->type == I_NxN ? 0 : 1;
 
         ctxIdxOffset = 3;
         ctxIdx = condTermFlagA + condTermFlagB + ctxIdxOffset;
-        if(decode_binary(ctxIdx))// 解第 0 位 看是不是I_NxN
+        if(!decode_binary(ctxIdx))// 解第 0 位 看是不是I_NxN
             return 0;
         else
         {
@@ -344,9 +369,13 @@ uint16 cabac::read_mb_type()
                     result += 4; // 第一位是 1 往下偏移 4 
                     if(decode_binary(++ctxIdx)) // 色彩编码模式的第二位
                         result += 4;
+                        
+                    ctxIdx++;// 不管第三位之后的这位解码出来是什么，第三位是 1 那么 下一次的 ctxIdx 加1
                 }
-                // predmode 解码预测模式，两位，上下文索引顺延上面的值 
-                predmode = decode_binary(++ctxIdx);
+                else
+                    ctxIdx+=2; // 如果第三位为 0 ，那么第四位的ctx顺延两位
+                // predmode 解码预测模式，两位，上下文索引顺延上面的值
+                predmode = decode_binary(ctxIdx);
                 predmode <<= 1;
                 predmode |= decode_binary(++ctxIdx);
                 result += predmode;// 解出来就是值 向下偏移对应位数
@@ -405,8 +434,9 @@ uint16 cabac::read_mb_type()
         if(decode_binary(ctxIdx))// 第一位是 1, 那么是帧内块
         {
             result += 5; // 前缀
-            // 0 号 和 1号 的ctxIdx 顺延
-            if(decode_binary(++ctxIdx)) // 是 I_NxN
+            //到帧内了，换帧内 offset 解后缀第一位
+            ctxIdx = 0 + suffix_ctxIdxOffset;
+            if(!decode_binary(ctxIdx)) // 是 I_NxN
                 result += 0;
             else
                 result += 1;           // 是 I_PCM 或者 I_16x16
@@ -429,9 +459,11 @@ uint16 cabac::read_mb_type()
                     result = 0; // P_L0_16x16
         }
         // 这里能写 等于 是因为 I_NxN 如果能出来也已经出来了
+        // 换 ctx 的步骤在上面也有一步
         if(result <= 5) return result;
         // 否则是帧内块，换 ctxIdx
         ctxIdx = 0 + suffix_ctxIdxOffset;
+        // 因为第一位如果存在，则在上面已经解码过了，所以这里是第二位开始
         if(decode_finaly()) // 快进到休止解码判断 I_PCM
             { init_engine();return 30;}
         else
@@ -443,13 +475,14 @@ uint16 cabac::read_mb_type()
             if(decode_binary(++ctxIdx))  //第3位 色彩编码模式 如果！= 0 那么后面还有一位
             {
                 result += 4; // 第一位是 1 往下偏移 4 
-                if(decode_binary(++ctxIdx)) // 色彩编码模式的第二位
+                if(decode_binary(ctxIdx)) // 色彩编码模式的第二位  
+                                        // ctx = 2 + offset 第三位不为 0 
                     result += 4;
             }
             // predmode 解码预测模式，两位，上下文索引顺延上面的值 
             predmode = decode_binary(++ctxIdx);
             predmode <<= 1;
-            predmode |= decode_binary(++ctxIdx);
+            predmode |= decode_binary(ctxIdx);// ctx 到这里不变
             result += predmode;// 解出来就是值 向下偏移对应位数
 
             return result;
@@ -505,33 +538,49 @@ uint16 cabac::read_mb_type()
         uint8 prefix_ctxIdxOffset = 27;
         uint8 suffix_ctxIdxOffset = 32;
         int condTermFlagA, condTermFlagB;
+
+        if(!cur->neighbour.A.avaiable) condTermFlagA = 0;
+        else 
+        {
+            type_macroblock type = cur->neighbour.A.pointer->type;
+            condTermFlagA = (type == B_Skip || type == B_Direct_16x16) ? 0 : 1;
+        }
+        if(!cur->neighbour.B.avaiable) condTermFlagB = 0;
+        else 
+        {
+            type_macroblock type = cur->neighbour.B.pointer->type;
+            condTermFlagB = (type == B_Skip || type == B_Direct_16x16) ? 0 : 1;
+        }
+        
         int tmp = 0;
         result = 0;
-        ctxIdx = condTermFlagA + condTermFlagA + prefix_ctxIdxOffset;
+        ctxIdx = condTermFlagA + condTermFlagB + prefix_ctxIdxOffset;
         if(decode_binary(ctxIdx)) // 0
         {
+            result += 1;
             ctxIdx = 3 + prefix_ctxIdxOffset;
             if(decode_binary(ctxIdx))// 1
             {
+                result += 2;
                 // 下面这个 if 和 else 段的代码要结合附件中的图来看和分析
                 ctxIdx = 4 + prefix_ctxIdxOffset;
                 if(decode_binary(ctxIdx))// 2  从这个if开始 ，ctxIdx 不再变化
                 {
                     ctxIdx = 5 + prefix_ctxIdxOffset;
-                    result += 8; // 向下 8 位
+                    result = 12;// 起始3个1，从 12 开始
                                tmp |= decode_binary(ctxIdx);
                     tmp <<= 1; tmp |= decode_binary(ctxIdx);
                     tmp <<= 1; tmp |= decode_binary(ctxIdx);
                     if(tmp < 5)
                     {
-                        tmp <<= 1; tmp = decode_binary(ctxIdx); 
-                        result += tmp;
+                        tmp <<= 1; tmp |= decode_binary(ctxIdx); 
+                        result += tmp;// 这个区间的tmp值就是从12开始的偏移值
                     }
                     else
                     {
-                        if(tmp == 5)      result = 23;
-                        else if(tmp == 6) result = 11;
-                        else result = 22;
+                        if(tmp == 5)      result = 23;// 帧内的前缀不用换ctx
+                        else if(tmp == 6) result = 11;// B_L1_l0_8x16
+                        else result = 22;// B_8x8
                     }
                 }
                 else
@@ -546,41 +595,45 @@ uint16 cabac::read_mb_type()
             }
             else
             {
-                result += 1; // 向下 1 位
                 ctxIdx = 5 + prefix_ctxIdxOffset;
                 if(decode_binary(ctxIdx))
-                    result += 1;// (B_L1_16x16)
+                    result += 1; // (B_L1_16x16)
                 else
-                    result += 0;//(B_L0_16x16)
+                    result += 0; //(B_L0_16x16)
             }
         }
         else
-            result = 0;
+            result = 0;// B_Direct_16x16
         // 23 号就是 I_NxN 
-        if(result <= 23) return result;
-        ctxIdx = 0 + suffix_ctxIdxOffset;
-        if(decode_finaly()) // 快进到休止解码判断 I_PCM
-            {init_engine();return 48;}
-        else // 和求 P 中的 I块一样的步骤
+        if(result < 23) return result;
+        ctxIdx = 0 + suffix_ctxIdxOffset;// 到了后缀才需要换ctx
+        if(decode_binary(ctxIdx))// 首先判断是不是 I_NxN
         {
-            int predmode;
-            ctxIdx = 2 - 1 + suffix_ctxIdxOffset;
-            if(decode_binary(ctxIdx)) // 第2位 有没有 AC 系数 ，有则往下偏移 12
-                result += 12;
-            if(decode_binary(++ctxIdx))  //第3位 色彩编码模式 如果！= 0 那么后面还有一位
+            result += 1;
+            if(decode_finaly()) // 快进到休止解码判断 I_PCM
+                {init_engine();return 48;}// I_PCM
+            else // 和求 P 中的 I块一样的步骤
             {
-                result += 4; // 第一位是 1 往下偏移 4 
-                if(decode_binary(++ctxIdx)) // 色彩编码模式的第二位
-                    result += 4;
-            }
-            // predmode 解码预测模式，两位，上下文索引顺延上面的值 
-            predmode = decode_binary(++ctxIdx);
-            predmode <<= 1;
-            predmode |= decode_binary(++ctxIdx);
-            result += predmode;// 解出来就是值 向下偏移对应位数
+                int predmode;
+                ctxIdx = 2 - 1 + suffix_ctxIdxOffset;
+                if(decode_binary(ctxIdx)) // 第2位 有没有 AC 系数 ，有则往下偏移 12
+                    result += 12;
+                if(decode_binary(++ctxIdx))  //第3位 色彩编码模式 如果！= 0 那么后面还有一位
+                {
+                    result += 4; // 第一位是 1 往下偏移 4 
+                    if(decode_binary(ctxIdx)) // 色彩编码模式的第二位
+                        result += 4;
+                }
+                // predmode 解码预测模式，两位，上下文索引顺延上面的值 
+                predmode = decode_binary(++ctxIdx);
+                predmode <<= 1;
+                predmode |= decode_binary(ctxIdx);
+                result += predmode;// 解出来就是值 向下偏移对应位数
 
-            return result;
+                return result;
+            }
         }
+        else return 23;// I_NxN
     }
     
     return result;
@@ -688,8 +741,8 @@ uint8 cabac::read_transform_8x8_size_flag()
     
     macroblock* currentMB = lifeTimeSlice->curMB;
     macroblock* A = NULL, * B = NULL;
-    A = pic->neighbour_macroblock(currentMB, 'A');
-    B = pic->neighbour_macroblock(currentMB, 'B');
+    neighbour_macroblock(currentMB, 'A', &A);
+    neighbour_macroblock(currentMB, 'B', &B);
     uint8  condTermFlagA = 0,  condTermFlagB = 0;
 
     if(!A || A->transform_size_8x8_flag == 0) condTermFlagA = 0;
@@ -715,8 +768,9 @@ uint16 cabac::read_coded_block_pattern()
     
     uint8 result_cur = 0;
     uint16 result = 0;
-    macroblock* currentMB = lifeTimeSlice->curMB;
-    macroblock* A = NULL, * B = NULL;
+    macroblock* current = lifeTimeSlice->curMB;
+    macroblock *A = current->neighbour.A.avaiable ? current->neighbour.A.pointer : NULL;
+    macroblock *B = current->neighbour.B.avaiable ? current->neighbour.B.pointer : NULL;
     //prefix
     // uint16 prefix_ctxIdxInc = 0;
     // uint16 prefix_result = 0;
@@ -758,37 +812,59 @@ uint16 cabac::read_coded_block_pattern()
     */
     memset(cbp, 0, 8);
     // 因为 coded_block_pattern 是一次读完所有的 8x8 ，一定是会需要到周围的宏块的数据的
-    if(A) // A 如果是 NULL，那么这个也就是 0 
-    {
+
+    // A == NULL,   0
+    // A == I_PCM   0
+    // A 是Skip宏块  1
+    // A 有编码系数，则反转
+    
         // PCM 宏块 和 Skip 宏块没有 残差，也就没有这个编码系数
-        if(A->type != I_PCM && !A->mb_skip_flag)
+        if(A && A->type != I_PCM && !A->mb_skip_flag)
         {
-            cbp[4] = A->CodedBlockPatternLuma & 2;
-            cbp[5] = A->CodedBlockPatternLuma & 8;
+            cbp[4] = A->CodedBlockPatternLuma & 2 ? 0 : 1;
+            cbp[5] = A->CodedBlockPatternLuma & 8 ? 0 : 1;
         }
-    }
-    if(B)
-    {
-        if(A->type != I_PCM && !A->mb_skip_flag)
+        else if(A && A->mb_skip_flag)
         {
-            cbp[6] = A->CodedBlockPatternLuma & 4;
-            cbp[7] = A->CodedBlockPatternLuma & 8;
+            cbp[4] = 1;
+            cbp[5] = 1;
         }
-    }
-    condTermFlagA = cbp[4]; condTermFlagB = cbp[6];
+        else
+        {
+            cbp[4] = 0;
+            cbp[5] = 0;
+        }
+        
+        if(B && B->type != I_PCM && !B->mb_skip_flag)
+        {
+            cbp[6] = B->CodedBlockPatternLuma & 4 ? 0 : 1;
+            cbp[7] = B->CodedBlockPatternLuma & 8 ? 0 : 1;
+        }        
+        else if(B && B->mb_skip_flag)
+        {
+            cbp[6] = 1;
+            cbp[7] = 1;
+        }
+        else
+        {
+            cbp[6] = 0;
+            cbp[7] = 0;
+        }
     // 上面的flag是乘以 2 ，左边的是 乘以 1 然后加上offset 就是 上下文索引了
+    // 注意：相邻位不为 1 ，则 Flag 为 0 ，否则 为 1，也就是相邻位的取反操作
+    condTermFlagA = cbp[4]; condTermFlagB = cbp[6];
     ctxIdx = condTermFlagA + 2 * condTermFlagB + prefix_ctxIdxOffset;
-    cbp[0] = decode_binary(ctxIdx);
+    cbp[0] = !decode_binary(ctxIdx);
     // 后面3个类似，等式就不多写了
     // 因为 8x8 block的周围有出现是本宏块的情况
     // 但是这样写死之后，之前都能解码出来，所以就能用了
     // 也就不用判断之前已经解码的是否可用了
-    cbp[1] = decode_binary(cbp[0] + 2 * cbp[7] + prefix_ctxIdxOffset);
-    cbp[2] = decode_binary(cbp[5] + 2 * cbp[0] + prefix_ctxIdxOffset);
-    cbp[3] = decode_binary(cbp[2] + 2 * cbp[1] + prefix_ctxIdxOffset);
-    for (int i = 0; i < 4; i++)
+    cbp[1] = !decode_binary(cbp[0] + 2 * cbp[7] + prefix_ctxIdxOffset);
+    cbp[2] = !decode_binary(cbp[5] + 2 * cbp[0] + prefix_ctxIdxOffset);
+    cbp[3] = !decode_binary(cbp[2] + 2 * cbp[1] + prefix_ctxIdxOffset);
+    for (int i = 0; i < 4; i++)// 解码出来的flag是取反的值，所以需要取反得到原来的值
     {   // 分别移位运算，放到正确的位置上
-        result |= cbp[i] << i;
+        result |= (!cbp[i]) << i;
     }
     // uint16 suffix_ctxIdxInc = 0;
     // uint16 suffix_result = 0;
@@ -834,14 +910,16 @@ uint16 cabac::read_coded_block_pattern()
     condTermFlagA = (!a_avaiable || A->CodedBlockPatternChroma == 0) ? 0 : 1;
     condTermFlagB = (!b_avaiable || B->CodedBlockPatternChroma == 0) ? 0 : 1;
 
-    ctxIdx = condTermFlagA + 2 * condTermFlagB + 4 + suffix_ctxIdxOffset; // binIdx == 1, 中间要+4
+    ctxIdx = condTermFlagA + 2 * condTermFlagB + 0 + suffix_ctxIdxOffset; // binIdx == 0, 中间要+0
     if(decode_binary(ctxIdx))
     {
         condTermFlagA = (!a_avaiable || A->CodedBlockPatternChroma != 2) ? 0 : 1;
         condTermFlagB = (!b_avaiable || B->CodedBlockPatternChroma != 2) ? 0 : 1;
-        ctxIdx = condTermFlagA + 2 * condTermFlagB + suffix_ctxIdxOffset; // binIdx == 2, 中间要+0
+        ctxIdx = condTermFlagA + 2 * condTermFlagB + 4 + suffix_ctxIdxOffset; // binIdx == 1, 中间要+4
         if(decode_binary(ctxIdx))
-            result |= 3 << 4;// 0011xxxx AC DC 都传送
+            result |= 2 << 4;// 0011xxxx AC DC 都传送 
+            // 这里本来应该是传 3（二进制 11）的，但是之后求色度编码系数用的是 coded_block_pattern / 16 
+            // 为了好处理就传 2 了，
         else
             result |= 1 << 4;// 0001xxxx 只传输 DC
     }
@@ -887,17 +965,17 @@ int8 cabac::read_mb_qp_delta()
     int ctxIdxOffset = 60;
     int sig;
     // Unary binarization
-    ctxIdx = lifeTimeSlice->last_mb_qp_delta == 0 ? 0 : 1 + ctxIdxOffset;
+    ctxIdx = (lifeTimeSlice->last_mb_qp_delta == 0 ? 0 : 1) + ctxIdxOffset;
     result = decode_binary(ctxIdx);
-    if(!result) return 0;
+    if(!result) result = 0;
     else
     {
         // 换上下文
         ctxIdx = 2 + ctxIdxOffset;
         // decode_unary 解一次之后还会换上下文 ： ctxIdx + offset
         result += decode_unary(ctxIdx, 1);
-        sig = result & 0x1 ? -1 : 1; // 看result是不是 2 的倍数，来确定符号
-        result = sig * (result + 1 >> 1);// +1 >> 1 就相当与 ceil(result/2)
+        sig = result & 0x1 ? 1 : -1; // 看result是不是 2 的倍数，来确定符号 (-1)^(k+1)
+        result = sig * (result + 1 >> 1);// +1 >> 1  ceil(result/2)
     }
     lifeTimeSlice->last_mb_qp_delta = result;
     return result;
@@ -999,16 +1077,20 @@ uint8 cabac::read_coded_block_flag(int syntaxelement)
     BlockType blk = (BlockType)ctxBlockCat;
     
     //get ctxIdxOffset
-    uint16 ctxIdxOffset = ctxBlockCat == 5 ? 1012 : 85; // 因为大于 5 的都是 444 的，所以这里不做判断了
+    ctxIdxOffset = ctxBlockCat == 5 ? 1012 : 85; // 因为大于 5 的都是 444 的，所以这里不做判断了
     // if(ctxBlockCat < 5) ctxIdxOffset = 85;
     // else if(ctxBlockCat > 5 && ctxBlockCat < 9) ctxIdxOffset = 460;
     // else if(ctxBlockCat > 9 && ctxBlockCat < 13) ctxIdxOffset = 472;
     // else if(ctxBlockCat == 5 || ctxBlockCat == 9 || ctxBlockCat == 13) ctxIdxOffset = 1012;
+
+    
     
     int index_A = 0;
     int index_B = 0;
-    macroblock* mbAddrA = NULL; pic->neighbour_4x4block(current, index, 'A', &mbAddrA,  &index_A);
-    macroblock* mbAddrB = NULL; pic->neighbour_4x4block(current, index, 'B', &mbAddrB,  &index_B);
+    macroblock* mbAddrA = NULL; 
+    macroblock* mbAddrB = NULL; 
+    neighbour_luma_4x4_indice(current, index, 'A', &mbAddrA,  &index_A);
+    neighbour_luma_4x4_indice(current, index, 'B', &mbAddrB,  &index_B);
 
     block*  transBlockA;
     block*  transBlockB;
@@ -1018,52 +1100,53 @@ uint8 cabac::read_coded_block_flag(int syntaxelement)
     // 16x16 DC
     // 这种方法直接读取全块，宏块级别
     {  
-        transBlockA = A->avaiable && A->pointer->predmode == Intra_16x16 ? &A->pointer->re->luma[0] : NULL;
-        transBlockA = B->avaiable && A->pointer->predmode == Intra_16x16 ? &B->pointer->re->luma[0] : NULL;
+        transBlockA = A->avaiable && A->pointer->predmode == Intra_16x16 ? &A->pointer->re->luma[COEFF_LUMA_DC16] : NULL;
+        transBlockB = B->avaiable && B->pointer->predmode == Intra_16x16 ? &B->pointer->re->luma[COEFF_LUMA_DC16] : NULL;
         
     }
     else if(blk == LUMA_16x16_AC) // iCbCr
+    // Luma16x16AC
     {
         auto f = [](macroblock* cur, macroblock* N, int index_N)->block*
         {
             block* transBlockN = NULL;
             bool state = N && !N->mb_skip_flag && N->type != I_PCM && ((N->CodedBlockPatternLuma >> (index_N >> 2)) & 1) != 0;
             if(state && N->transform_size_8x8_flag == 0)
-                transBlockN = &N->re->luma[1][index_N/4][index_N%4];
+                transBlockN = &N->re->luma[COEFF_LUMA_AC16][index_N/4][index_N%4];
             else if(state && N->transform_size_8x8_flag == 1)
-                transBlockN = &N->re->luma[1][index_N >> 2];//
+                transBlockN = &N->re->luma[COEFF_LUMA_AC16][index_N >> 2];//
             else transBlockN = NULL;
             return transBlockN;
         };
-
         transBlockA = f(current,  mbAddrA, index_A);
-        transBlockB = f(current,  mbAddrA, index_B);   
+        transBlockB = f(current,  mbAddrB, index_B);   
     }
     else if(blk == LUMA_4x4) // luma4x4BlkIdx.
     // Luma16x16AC  4x4 
     // 这两种方法都是按照 i8x8->i4x4 来读取的，block的结构是一样
     {
+
         auto f = [](macroblock* cur, macroblock* N, int index_N)->block*
         {
             block* transBlockN = NULL;
             bool state = N && !N->mb_skip_flag && N->type != I_PCM && ((N->CodedBlockPatternLuma >> (index_N >> 2)) & 1) != 0;
             if(state && N->transform_size_8x8_flag == 0)
-                transBlockN = &N->re->luma[0][index_N/4][index_N%4];
+                transBlockN = &N->re->luma[COEFF_LUMA_4x4][index_N/4][index_N%4];
             else if(state && N->transform_size_8x8_flag == 1)
-                transBlockN = &N->re->luma[0][index_N >> 2];//
+                transBlockN = &N->re->luma[COEFF_LUMA_4x4][index_N >> 2];//
             else transBlockN = NULL;
             return transBlockN;
         };
 
         transBlockA = f(current,  mbAddrA, index_A);
-        transBlockB = f(current,  mbAddrA, index_B);      
+        transBlockB = f(current,  mbAddrB, index_B);      
     }
     else if(blk == CHROMA_DC) // iCbCr
     // Chroma DC
     // 也是全块，
     {
-        transBlockA = A->avaiable && !A->IPCM && !A->Skip && A->pointer->CodedBlockPatternChroma != 0 ? &A->pointer->re->chroma[0][iCbCr] : NULL;
-        transBlockB = B->avaiable && !B->IPCM && !B->Skip && B->pointer->CodedBlockPatternChroma != 0 ? &B->pointer->re->chroma[0][iCbCr] : NULL;
+        transBlockA = A->avaiable && A->pointer->type != I_PCM && A->pointer->mb_skip_flag != 1 && A->pointer->CodedBlockPatternChroma != 0 ? &A->pointer->re->chroma[COEFF_CHRO_DC][iCbCr] : NULL;
+        transBlockB = B->avaiable && B->pointer->type != I_PCM && B->pointer->mb_skip_flag != 1 && B->pointer->CodedBlockPatternChroma != 0 ? &B->pointer->re->chroma[COEFF_CHRO_DC][iCbCr] : NULL;
     }
     else if(blk == CHROMA_AC) // chroma4x4BlkIdx iCbCr
     {
@@ -1071,10 +1154,12 @@ uint8 cabac::read_coded_block_flag(int syntaxelement)
         {
             block* transBlockN = NULL;
             bool state = mbAddrN && !mbAddrN->mb_skip_flag && mbAddrN->type != I_PCM && mbAddrN->CodedBlockPatternChroma == 2;
-            if(state) transBlockN = &mbAddrN->re->chroma[1][iCbCr][index_N];
+            if(state) transBlockN = &mbAddrN->re->chroma[COEFF_CHRO_AC][iCbCr][0][index_N];
 
             return transBlockN;
         };
+        neighbour_chroma_4x4(current, index, 'A', &mbAddrA, &index_A);
+        neighbour_chroma_4x4(current, index, 'B', &mbAddrB, &index_B);
         transBlockA = f(mbAddrA, index_A);
         transBlockB = f(mbAddrB, index_B);
     }
@@ -1125,16 +1210,10 @@ uint32 cabac::read_coeff_abs_level_minus1(int syntaxelement)
 {
     uint8 ctxBlockCat = (syntaxelement >> 8) & 0xF;
 
-    int binIdx = -1;
-    //当前的binIdx解出来的ctxIdx
-    int result = 0;
-    //当前位上的数据
-    uint32 result_cur = 0;
-    //当前解出来的二进制串的数据
-    uint32 result_str = 0;
+    uint32 result;
     //当前的结果
-    int64 prefix_result;
-    int64 suffix_result;
+    int64 prefix_result = 0;
+    int64 suffix_result = 0;
     //总的offset
     uint8 ctxIdxOffset = 0;
 
@@ -1172,24 +1251,21 @@ uint32 cabac::read_coeff_abs_level_minus1(int syntaxelement)
     ctxIdx = ((numDecodAbsLevelGt1 != 0) ? 0: Min(4, (1 + numDecodAbsLevelEq1))) + prefix_ctxIdxOffset + ctxIdxBlockCatOffsetOfctxBlockCat[3][ctxBlockCat];
     if(decode_binary(ctxIdx))
     {
-        result++;
+        prefix_result++;
         // 第二位换ctx
         ctxIdx = 5 + Min(4 - ((ctxBlockCat == 3)?1 : 0), numDecodAbsLevelGt1) + prefix_ctxIdxOffset + ctxIdxBlockCatOffsetOfctxBlockCat[3][ctxBlockCat];
         for(int i = 0; i < 13; i++) // 因为cMax = 14, 所以后面还可能有最长13位
         {
-            if(decode_binary(ctxIdx)) result++;
+            if(decode_binary(ctxIdx)) prefix_result++;
             else break;
         }
     }
     else
-        result = 0;
+        prefix_result = 0;
     if(terr.cabac_result_bin()) std::cout << ">>cabac: break line -------------------------------for prefix & suffix" << std::endl;
     //求后缀二值串，旁路解码
-    uint8 binIdx2 = -1;
-    result_cur = 0;
-    result_str = 0;
     //如果前缀不足14位或者是一个14位的截断数，那么没有后缀
-    if(prefix_result <= 14) suffix_result = 0;
+    if(prefix_result < 14) suffix_result = 0;
     // else // if(prefix_result == 14)
     // {
     //     do
@@ -1217,8 +1293,10 @@ uint16 cabac::read_intra_chroma_pred_mod()
     uint8 condTermFlagA = 0;
     uint8 condTermFlagB = 0;
     macroblock* cur   = lifeTimeSlice->curMB;
-    macroblock* A     = pic->neighbour_macroblock(cur, 'A');
-    macroblock* B     = pic->neighbour_macroblock(cur, 'B');
+    macroblock* A     ;
+    macroblock* B     ;
+    neighbour_macroblock(cur, 'A', &A);
+    neighbour_macroblock(cur, 'B', &B);
     auto f = [](macroblock* cur, macroblock* N)->uint8_t{
         uint8 condTermFlagN;
         if(!cur->is_avaiable(N) ||\
@@ -1320,8 +1398,11 @@ uint8 cabac::read_ref_idx(int syntaxelements)
     {
         int tmp = 0;
         int mbPartIdxN = 0;
+        int subPartIdxN = 0;
         uint8 fieldflag = 0;//if(MbaffFrameFlag && cur是帧宏块 && N 是场宏块)
         macroblock* N ;//= p->neig(cur, direction, 0x010, mbPartIdx, 0, mbPartIdxN, tmp);
+        // neighbour_luma_4x4_indice(cur, mbPartIdx, direction, &N, &mbPartIdxN);
+        neighbour_part_16x16(cur, mbPartIdx, 0, direction, &N, &mbPartIdxN, &subPartIdxN);
         uint8 predModeEqualFlagN = 0;
         uint8 refIdxZeroFlagN = 0;
         if(N)
@@ -1382,6 +1463,7 @@ int cabac::read_mvd_lx(int syntaxelements)
     uint16 result_all = 0;
     int result = 0;
     
+    // 从句法元素中取出 对于位置上的参数值
     uint8 temporalDirection = (syntaxelements) & 0x1;
     uint8 spatialDirection  = (syntaxelements >> 1) & 0x1;
     uint8 subMbPartIdx      = (syntaxelements >> 4) & 0xF;
@@ -1401,17 +1483,25 @@ int cabac::read_mvd_lx(int syntaxelements)
     if(spatialDirection == 0) prefix_ctxIdxOffset = 40;
     else                      prefix_ctxIdxOffset = 47;
 
-
-    auto f = [p,mbPartIdx,subMbPartIdx,Pred_L, temporalDirection, spatialDirection, MbaffFrameFlag](macroblock* cur,int mbPartIdxN, char direction)->uint16_t{
+    auto f = [p,mbPartIdx,subMbPartIdx,Pred_L, temporalDirection, spatialDirection, MbaffFrameFlag](macroblock* cur,int mbPartIdxN, char direction)->uint16
+    {
         int subMbPartIdxN = 0;
         uint8 fieldflag = 0;//if(MbaffFrameFlag && cur是帧宏块 && N 是场宏块)
         macroblock* N ;//= p->get_PartNeighbour(cur, direction, 0x010, mbPartIdx, subMbPartIdx, mbPartIdxN, subMbPartIdxN);
+        
+        neighbour_part_16x16(cur, mbPartIdx, subMbPartIdx,direction, &N, &mbPartIdxN, &subMbPartIdxN);
         MotionVector** mvd_lX = NULL;
-        if(N) mvd_lX = temporalDirection ? N->inter->mv.mvd_l1 : N->inter->mv.mvd_l0; 
-
         uint8 predModeEqualFlagN = 0;
-        if(N)
+
+        uint16 absMvdCompN = 0;
+        if( !cur->is_avaiable(N) || \
+            (N->type == P_Skip || N->type == B_Skip) || \
+            N->is_intrapred() 
+        )
+        {absMvdCompN = 0;}
+        else
         {
+            mvd_lX = temporalDirection ? N->inter->mv.mvd_l1 : N->inter->mv.mvd_l0; 
             if(N->type == B_Direct_16x16 || N->type == B_Skip) predModeEqualFlagN = 0;
             else if(N->type == P_8x8 || N->type == B_8x8)
             {
@@ -1425,17 +1515,11 @@ int cabac::read_mvd_lx(int syntaxelements)
                 if(partpremode != Pred_L && partpremode != BiPred)predModeEqualFlagN = 0;
                 else predModeEqualFlagN = 1;
             }
-        }
-        uint16 absMvdCompN = 0;
-        if( !cur->is_avaiable(N) || \
-            (N->type == P_Skip || N->type == B_Skip) || \
-            N->is_intrapred() || \
-            predModeEqualFlagN == 0  )
-        {absMvdCompN = 0;}
-        else
-        {
+            if(predModeEqualFlagN == 0) absMvdCompN = 0;
             //这俩还有两个帧场的条件
-            absMvdCompN = Abs(mvd_lX[mbPartIdxN][subMbPartIdxN][spatialDirection]);
+            else
+                absMvdCompN = Abs(mvd_lX[mbPartIdxN][subMbPartIdxN][spatialDirection]);
+
         }
         return absMvdCompN;
     };
@@ -1468,6 +1552,7 @@ int cabac::read_mvd_lx(int syntaxelements)
     if(absMvdComp < 3) ctxIdxInc = 0;
     else if(absMvdComp > 32) ctxIdxInc = 2;
     else ctxIdxInc = 1;
+
     ctxIdx = ctxIdxInc + prefix_ctxIdxOffset;
     if(decode_binary(ctxIdx))
     {
@@ -1475,7 +1560,7 @@ int cabac::read_mvd_lx(int syntaxelements)
         for(int i = 0; i < 8; i++)// 前缀是 9 位的截断数，解码一位之后还可能有 8 位
         {
                 //  起始值  //大于6则ctxIdxInc为6      // ctx偏移
-            ctxIdx = 3 + (i > 3 ? i : 3) + prefix_ctxIdxOffset;
+            ctxIdx = 3 + (i > 3 ? 3 : i) + prefix_ctxIdxOffset;
             if(decode_binary(ctxIdx)) prefix_result++;
             else break;
         }
@@ -1487,7 +1572,7 @@ int cabac::read_mvd_lx(int syntaxelements)
     // uint32 result_str = 0;
     //求后缀，旁路解码 
     //如果前缀不足9位或者是一9位的截断数，那么没有后缀
-    if(prefix_result <= 9) suffix_result = 0;
+    if(prefix_result < 9) suffix_result = 0;
     else suffix_result = decode_uegk(3);// 否则是 3 阶 解码
     // else if(prefix_result == 9 )
     // {
@@ -1514,6 +1599,9 @@ int cabac::read_mvd_lx(int syntaxelements)
 
 
 // 这三个方法已经不需要了，留在这里做方法的算法说明吧
+// 关键问题是，。。。代码说明好像更复杂了
+// 其实二值化的方法完全可以用代码逻辑写死（已经干了），，写成函数反而看不懂了
+
 int IsIn_U_binarization(uint64 value, uint8 binIdx)
 {
     uint32 a = 0;
@@ -1598,8 +1686,6 @@ bool cabac::slice_new(picture* p, slice *sl)
     set_slice(sl);
     set_pic(p);
 
-    init_variable();
-    init_engine();
 }
 bool cabac::slice_end()
 {

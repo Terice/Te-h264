@@ -37,4 +37,7 @@ writer向外界写出picture
 
 对于slice、mbcroblock等，没有说明的时候
 type一律指的是枚举类型
-slice_type等一律指的是读取出来的句法元素
+slice_type， mb_type等一律指的是读取出来的句法元素的真实值
+
+# 笔记
+Intra_16x16 的Plane预测，H 指的是上面，V 指的才是左边

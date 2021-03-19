@@ -59,8 +59,9 @@ private:
     // 帧间解码
     void Decode_Inter();
 
+    void ConstructPicture_4x4(matrix *pred4x4);
     // 重建图像
-    void ConstructPicture();
+    void ConstructPicture_16x16();
 
     void Calc_residual();
 public:
@@ -95,9 +96,10 @@ public:
     
     // 来自slice读取的句法元素，说明当前宏块是不是Skip宏块
     // 如果是的话，还需要做初始化空block的动作
-    uint16 mb_skip_flag;
+    bool mb_skip_flag;
     // 场解码模式，应该用不上吧，，毕竟场解码函数都没写  
     uint16 mb_field_decoding_flag; 
+
 
     // 8x8变换系数解码，用来判断I_NxN究竟是4x4 还是 8x8
     // 但实际上这个句法元素还有别的用处
@@ -158,22 +160,23 @@ public:
     MacroBlockNeigh neighbour;
     
 
+
+    // 计算量化参数
+    void calcqp();
+
     // 基本的deocde函数
     void decode();
-
-
     // 完成基本解码环境的分析
     void ParseHead();
     // 完成数据的解码
     void DecodeData();
 
     macroblock();
-    macroblock(slice* s, parser* p);
+    macroblock(slice* s, parser* p, decoder *d);
     ~macroblock();
 
 
 
-    uint8 get_PosByIndex(int index, int& r, int& c);
 };
 
 

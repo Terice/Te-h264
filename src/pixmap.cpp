@@ -3,16 +3,26 @@
 #include "gvars.h"
 #include <string.h>
 
-pixmap::pixmap()
+pixmap::pixmap(byte *data, int w, int h)
 {
-    step = 0;
-    res = NULL;
+    res.pointer = data;
+    res.length = w * h;
+    res.w = w;
+    res.h = h;
+
+    this->w = 16;
+    this->h = 16;
+    this->selected = false;
+    
+    this->pix = NULL;
 }
-pixmap::pixmap(void *data_res, int data_unit_length, area a)
+pixmap::pixmap(pixmap *p)
 {
-    step = data_unit_length;
-    res = data_res;
-    all = a;
+    this->res = p->res;
+
+    this->selected = false;
+
+    this->pix = p;
 }
 pixmap::~pixmap()
 {
@@ -28,43 +38,78 @@ bool  pixmap::checkpos(int x, int y)
 }
 byte* pixmap::transpos(int x, int y)
 {
-    return data[y] + x * step;
+    return data[y] + x ;
 }
 
 
 byte* pixmap::operator[](int i) const
 {
+    if(!selected)      terr.error("[pixmap]:area not select");
     return data[i];
 }
-bool pixmap::select(point start, area select)
+bool pixmap::select(int x, int y, int width, int height)
 {
-    int x = start.x;
-    int y = start.y;
-    data = new byte*[select.w];
-    h = select.h;
-    w = select.w;
-
-    // 宽度超过
-    if(start.x + select.w > all.w) terr.error("[pixmap](width  overflow)");
-    // 高度超过
-    if(start.y + select.h > all.h) terr.error("[pixmap](height overflow)");
-
-    // 得到选择部分的起始地址
-    void *select_start = res + (y * all.w + x) * step;
-
-    for (size_t i = 0; i < h; i++)
+    selected = true;
+    if(x < 0 || y < 0) terr.error("[pixmap]:position < 0");
+    if(!pix)
     {
-        // 每次往前加上一整行的长度就是下一行的开始
-        data[i] = (byte*)select_start + (i * all.w) * step;
+        this->w = width;this->h = height;
+        if(x+w > res.w || y+h > res.h) 
+            terr.error("[pixmap]55:position overflow");
+        else
+        {
+            data = new byte*[h];
+            byte* start = res.pointer + y * res.w + x;
+            for (int i = 0; i < h; i++)
+            {
+                data[i] = start + i * res.w;
+            }
+        }
+    }
+    else
+    {
+        this->w = width;this->h = height;
+        // 上一个选区一定是合法的
+        // 所以这里只需要在上一次选择的区域之中判断
+        if(x+w > pix->w || y+h > pix->h) 
+            terr.error("[pixmap]70:position overflow");
+        else
+        {
+            data = new byte*[h];
+            byte* tmp;
+            for (int i = 0; i < h; i++)
+            {
+                data[i] = pix->data[i + y] + x;
+            }
+        }
     }
     return true;
 }
 
-bool pixmap::get(int x, int y, void *r)
+
+
+std::ostream&  operator<<(std::ostream& out ,const pixmap& ma)
 {
-    memcpy(r, transpos(x, y), step);
+    for (size_t r = 0; r < ma.h; r++)
+    {
+        if(r % 4 == 0) 
+        {
+            printf("%-2zu", r);
+            for(int i = 0; i < ma.h; i+=4) 
+                printf("---------------------------%-2lu", i/4 + 1);
+            printf("\n");
+        }
+        
+        for (int c = 0; c < ma.w; c++)
+        {
+            if(c % 4 == 0) out << "|";
+            printf("%6d ", ma[r][c]);
+        }
+        printf("|\n");
+    }
+    printf("%-2d", ma.w);
+    for(int i = 0; i < ma.w; i+=4) 
+        printf("---------------------------%-2lu", i/4 + 1);
+    return out;
 }
-bool pixmap::set(int x, int y, void *v)
-{
-    memcpy(transpos(x, y), v, step);
-}
+    

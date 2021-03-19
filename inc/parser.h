@@ -57,11 +57,12 @@ private:
     // 因为其需要用到上下文和解码环境
     cabac* cabac_core;
 public:
-    parser();
+    parser(FILE *);
     ~parser();
 
     nal*   cur_nal;
     slice* cur_slice;
+    // slice 的计数器，
     int index_cur_slice;
 
 

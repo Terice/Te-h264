@@ -19,19 +19,38 @@ static int t2[4] =
 #include "reader.h"
 #include "sps.h"
 #include "pps.h"
-
+#include <math.h>
 
 // 刷新序列参数集
 bool parser::update_ps(SPS* s)
 {
-    if(pS->sps) delete pS->sps;
-    else pS->sps = s;
+    if(pS->sps) 
+        delete pS->sps;
+    pS->sps = s;
+
+
+    // 注意以下过程需要改进放在上面的update_ps函数中去
+    // 把一些SPS已经能够解析的传送给parser
+    this->pV->ChromaArrayType     = s->separate_colour_plane_flag == 0 ? s->chroma_format_idc : 0;
+    this->pV->BitDepthY           = s->bit_depth_luma_minus8 + 8;
+    this->pV->QpBdOffsetY         = s->bit_depth_luma_minus8 * 6;
+    this->pV->BitDepthC           = s->bit_depth_chroma_minus8 + 8;
+    this->pV->QpBdOffsetC         = s->bit_depth_chroma_minus8 * 6;
+    this->pV->MaxFrameNum         = (uint32_t)pow(2, s->log2_max_frame_num_minus4 + 4);
+    this->pV->PicWidthInMbs       = s->pic_width_in_mbs_minus1 + 1;
+    this->pV->PicHeightInMapUnits = s->pic_height_in_map_units_minus1 + 1;
+    this->pV->PicHeightInMbs      = s->pic_height_in_map_units_minus1 + 1;
+    this->pV->FrameHeightInMbs    = ( 2 - s->frame_mbs_only_flag ) * this->pV->PicHeightInMapUnits;
+    this->pV->PicSizeInMapUnits   = this->pV->PicWidthInMbs * this->pV->PicHeightInMapUnits;
+    this->pV->SubWidthC           = (s->chroma_format_idc == 1 || s->chroma_format_idc == 2) ? 2 : 1;
+    this->pV->SubHeightC          = (s->chroma_format_idc == 1) ? 2 : 1;
 }
 // 刷新图像参数集
 bool parser::update_ps(PPS* p)
 {
-    if(pS->pps) delete pS->pps;
-    else pS->pps = p;
+    if(pS->pps) 
+        delete pS->pps;
+    pS->pps = p;
 }
 void parser::set_cabac_slice_new(picture* pic, slice *sl){cabac_core->slice_new(pic,sl);}
 void parser::set_cabac_slice_end(){cabac_core->slice_end();}
@@ -89,10 +108,10 @@ bool   parser::find_nextNAL()
 }
 // void parser::rfsh(){bitstream->bfrsh();}
 
-parser::parser()
+parser::parser(FILE* fp)
 {
     
-    bitstream = new reader();
+    bitstream = new reader(fp);
     cabac_core = new cabac(this);
     pS = new ParametersS();
     pV = new ParametersV();
@@ -102,6 +121,7 @@ parser::parser()
     matrix_2x2Trans = new matrix(2,2,0);
     matrix_4x4Trans->from(t4, 16);
     matrix_2x2Trans->from(t2, 4);
+    index_cur_slice = 0;
 }
 parser::~parser()
 {    

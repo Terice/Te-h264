@@ -28,8 +28,8 @@ private:
     uint8 mask;      // 用来读取数据的 与 操作模
 
     //buf1是主缓冲区 buf2的作用是备用缓冲，一号缓冲区读到末尾但是还需要读取的时候，就使用二号来扩展
-    uint8 *buf1; bool state_buf1;
-    uint8 *buf2; bool state_buf2;
+    uint8 buf1[READER_SIZE_BUFFER]; bool state_buf1;
+    uint8 buf2[READER_SIZE_BUFFER]; bool state_buf2;
 
     // 文件指针，用来和文件做交换
     FILE* res;
@@ -50,7 +50,7 @@ private:
     // 比特指针、字节指针、掩模同步移动
     void brght();
 public:
-    reader();
+    reader(FILE *fp);
     ~reader();
 
     //判断是否对齐到字节边界
@@ -70,7 +70,7 @@ public:
     char bread_bi();
     // 读入当前比特位所在的字节位上的字节
     // 必须要对齐在边界上
-    char bread_ch();
+    int bread_ch();
 
     // bi 和 ch 是基本的两个方法，
     // 有基本的边界判断的问题，

@@ -1,6 +1,5 @@
 #include "block.h"
 
-
 block::block(int init_length)
 {
     childBlockLength = 0;
@@ -32,8 +31,8 @@ block& block::operator[](int i)
 }
 bool block::insert(int length)
 {
-    childBlock = new block[length];
     childBlockLength = length;
+    childBlock = new block[length]();
 }
 bool block::insert(int length, int data_length)
 {

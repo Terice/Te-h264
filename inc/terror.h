@@ -20,6 +20,7 @@ typedef struct DebugControl__
     char cabac_result_residual          ;
     char residual_transcoeff            ;
     char macroblock                     ;
+    char picture_mbcomplete             ;
     char residual_result_Y              ;
     char residual_result_Cb             ;
     char residual_result_Cr             ;
@@ -42,8 +43,8 @@ private:
     int index;
     std::string msg;
     void tconf(std::string conf);
-    DebugControl de;
 public:
+    DebugControl de;
     // 退出程序
     void texit(int);
     void temsg(std::string s);
@@ -74,7 +75,7 @@ public:
     DE_FUNC(timer                 );
     DE_FUNC(nal_info              );
     DE_FUNC(control_all           );
-    
+    DE_FUNC(picture_mbcomplete    );
     terror(/* args */);
     ~terror();
 };

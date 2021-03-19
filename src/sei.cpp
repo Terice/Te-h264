@@ -31,7 +31,7 @@ void sei::decode()
     }
     last_payload_size_byte = ch;
     sei_payload(payloadType, payloadSize);
-    std::cout << ">>sei: [" << payloadType <<"], ["<< payloadSize << "]" << std::endl;
+    // std::cout << ">>sei: [" << payloadType <<"], ["<< payloadSize << "]" << std::endl;
 }
 void sei::sei_payload(int, int)
 {

@@ -6,19 +6,18 @@
 #include <cmath>
 #include <assert.h>
 
+#include <iostream>
 
-
-reader::reader()
+reader::reader(FILE *fp)
 {
     mask = READER_MASK_INIT;
     pos_char = 0;
     pos_bits = 0;
     pos_max  = 0;
-    
 
-    buf2 = new uint8[READER_SIZE_BUFFER];
+    res = fp;    
+
     state_buf2 = false;
-    buf1 = new uint8[READER_SIZE_BUFFER];
     state_buf1 = true;
     data = buf1;
 
@@ -26,8 +25,6 @@ reader::reader()
 }
 reader::~reader()
 {
-    if(buf1) delete[] buf1;
-    if(buf2) delete[] buf2;
 }
 
 //--------局部函数
@@ -83,21 +80,21 @@ void reader::bflin(FILE *res)
                 case 0:if(ch == 0) state = 1; break;
                 case 1:if(ch == 0) state = 2; else state = 0; break;
                 case 2:if(ch == 3) state = 3; else if(ch == 0) state = 2; else state = 0; break;//如果出现03那么下一个状态，如果当前仍然是0，那么维持状态，否则解除状态
-                case 3:if(ch == 1 || ch == 2 || ch == 3 || ch == 0) state = 4; else state = 0; break;
+                // case 3:if(ch == 1 || ch == 2 || ch == 3 || ch == 0) state = 4; else state = 0; break;
                 default:state = 0; break;
             }
             //如果出现防止竞争序列，索引后退一个char，当前字符读入0x03位置上，然后count自增
-            if(state == 4)
+            if(state == 3)
             {
-                re--;
+                data[re] = (unsigned char)ch;
                 state = 0;
             }
-            data[re] = (unsigned char)ch;
-            re++;
+            else
+                data[re++] = (unsigned char)ch;
         }
         //如果最后一个字节是危险的字节，
         //那么尝试读取下一个字符来判断这个字节是否应该去掉
-        if(state == 3)
+        if(state == 2)
         {
             ch = fgetc(res);
             if(ch == 1 || ch == 2 || ch == 3 || ch == 0)
@@ -143,6 +140,7 @@ bool reader::bforc_ne()
     if(!pos_bits) return true;
     pos_bits = 0;
     pos_char++;
+    mask = READER_MASK_INIT;
     if(biend()) {bfrsh();} // 如果到达缓冲区末尾，那么刷新缓冲区，
 }
 char reader::bread_bi()
@@ -151,8 +149,9 @@ char reader::bread_bi()
     unsigned char cur = data[pos_char];
     unsigned char result = cur & mask;
     brght();
+    return result ? 1 : 0;
 }
-char reader::bread_ch()
+int reader::bread_ch()
 {
     assert(balgi());
 
@@ -167,17 +166,29 @@ uint64 reader::bread_bn(uint8 size)
     int s_char = size / 8;
     int s_bits = size % 8;
     uint64 result = 0UL;
+
+    // 读取时可能存在的几种情况
+    // |---O OOOO|OOOO O---|
+    // |--OO O---|
+    // |---- OOOO|OOOO OOOO|OOOO OO--|
     
     // 这一块自认为改进的还比较好看呢哈哈。
-    while(!balgi()) // 先将开头未对齐的比特位按照位运算读出来
+    while(s_bits) // 先将开头未对齐的比特位按照位运算读出来
     {
         result <<= 1;
         result |= bread_bi();
         s_bits--;
     }
-    // s_bits 小于0，说明需要修正，因为此时读取的位数是整字节，但是指针没有对齐到字节上
+    // s_char 小于0，说明需要继续读取，因为此时读取的位数是整字节，但是指针没有对齐到字节上
     // 修正之后就得到了末尾的未对齐比特数
-    if(s_bits < 0){s_bits += 8; s_char -= 1;}
+    if(s_char > 0){s_bits += 8; s_char -= 1;}
+    else return result; // 如果 s_char == 0 说明已经没有数据了，直接返回
+    while(!balgi()) // 再将开头未对齐的比特位按照位运算读出来
+    {
+        result <<= 1;
+        result |= bread_bi();
+        s_bits--;
+    }
     while(s_char)
     {
         result <<= 8;

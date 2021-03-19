@@ -120,8 +120,6 @@ typedef struct MacroBlockNeighInfo__
     macroblock *pointer;
 
     bool predsame;
-    bool Skip;
-    bool IPCM;
 }MacroBlockNeighInfo;
 
 /*

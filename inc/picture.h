@@ -29,33 +29,10 @@ private:
     pixel *picpix;
     // 当前的slice
     slice *sl;
-    /**
-     * 必须没有子块分区，也就是说所有的最小分区尺寸都必须相同
-        @param current 当前宏块
-        @param index 索引，逆扫描索引
-        @param direction 方向
-        @param width_part 当前part的宽，
-        @param height_part 当前part的高
-        @param width_all 当前宏块的宽
-        @param height_all 当前宏块的高
-        @param result 返回的宏块指针
-    */
-    void neighbour_position_nonsub(\
-        macroblock *current, int index, \
-        char direction, \
-        int width_part, int height_part,\
-        int width_all , int height_all, \
-        int * x_result, int *y_result,\
-        macroblock **result
-    );
-    void neighbour_position_sub(\
-        macroblock *current,\
-        int mbPartIdx, int subPartIdx,\
-        char direction, \
-        int width_all , int height_all, \
-        int * x_result, int *y_result,\
-        macroblock **result
-    );
+
+    // 宏块计数器
+    int count_mb;
+    
 public:
     picture(parser*, decoder*);
     ~picture();
@@ -81,23 +58,12 @@ public:
     // 根据 nal_ref_idc 来完成相应的动作
     void refidc(int nal_ref_idc);
 
+    void print();
+
+    void drawpic();
+
     // 因为只有picture才能完成相邻宏块之间的交流
     // 所以这些函数需要放在这里
-
-    // 得到4x4块的周围情况
-    // 宏块大小为 16x16 
-    // 输入的idx_4x4 必须是zig-zag扫描模式
-    void        neighbour_luma4x4(macroblock *current, int idx_4x4, char direction, macroblock **info, int *index_target);
-    // 得到4x4块的周围情况
-    // 宏块大小为 16x16 
-    // 输入的idx_4x4 必须是zig-zag扫描模式
-    void        neighbour_4x4block(macroblock *current, int idx_4x4, char direction, macroblock **info, int *index_target, int *r, int *c);
-    // 得到相邻宏块的情况
-    macroblock* neighbour_macroblock(macroblock* cur, char direction);
-    // 根据周围的运动矢量来预测当前part(subpart)的情况
-    void        neighbour_motionvector(macroblock *current, uint8 mbPartIdx, uint8 subPartIdx, uint8 direction, MotionVector **mv_lx);
-
-    void        neighbout_subpart(macroblock *current, int mbPartIdx, int subPartIdx, char direction, int *partIdx_result, int *subIdx_result);
 
     // 指明当前图像是不是IDR图像
     bool IdrPicFlag;

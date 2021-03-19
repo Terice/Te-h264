@@ -11,9 +11,11 @@
 #include "parser.h"
 #include "sps.h"
 
-// void Weight_CoefficWeight(bool is_explicit, matrix& m0, matrix& m1, matrix& out, int , int, bool flag_0, bool falg_1);
-// void Weight_defaultWeight(                  matrix& m0, matrix& m1, matrix& out,            bool flag_0, bool falg_1);
+#include "neighbour.h"
 
+#define six_tap_filter(a,b,c,d,e,f) (a - 5 * b + 20 * c + 20 * d - 5 * e + f)
+// 平均值
+#define two_tap_filter(a,b) ((a + b + 1) >> 1)
 
 int Prediction_Inter_Direct(\
     macroblock* current,\
@@ -54,8 +56,8 @@ int Prediction_Inter_Direct(\
     // {
         //这里有两种情况
         //1、宏块随着周围的宏块一起运动
-        pic->neighbour_motionvector(current, mbPartIdx, subMbPartIdx, 0, mv_l0);
-        pic->neighbour_motionvector(current, mbPartIdx, subMbPartIdx, 1, mv_l1);
+        neighbour_motionvector(current, mbPartIdx, subMbPartIdx, 0, mv_l0);
+        neighbour_motionvector(current, mbPartIdx, subMbPartIdx, 1, mv_l1);
         //2、宏块静止不动
 
         //参考索引简单都设置为0
@@ -167,17 +169,72 @@ void Weight_CoefficWeight(
     }  
 }
 
-static int  A__ = 0, B__ = 0, C__ = 0, D__ = 0, 
-            E__ = 0, F__ = 0, G__ = 0, H__ = 0, 
-            I__ = 0, J__ = 0, K__ = 0, L__ = 0, 
-            M__ = 0, N__ = 0, P__ = 0, Q__ = 0, 
-            R__ = 0, S__ = 0, T__ = 0, U__ = 0;
-static int* sampleX[20] = {
-    &A__,&B__,&C__,&D__,\
-    &E__,&F__,&G__,&H__,\
-    &I__,&J__,&K__,&L__,\
-    &M__,&N__,&P__,&Q__,\
-    &R__,&S__,&T__,&U__};
+
+
+/*
+    full luma sample interpolation:
+    假设整数像素分布如下：G 是当前运动矢量的整数值指向的值
+
+    A1    A0    [A]   [B]   B0    B1
+
+    C1    C0    [C]   [D]   D0    D1
+                ----------------------x
+    [E]   [F] | [G]   [H]   [I]   [J] 
+              | 
+    [K]   [L] | [M]   [N]   [P]   [Q] 
+              | 
+    R1    R0  | [R]   [S]   S0    S1
+              | 
+    T1    T0  | [T]   [U]   U0    U1
+              y
+    fragtional luma sample interpolation:
+    则分数像素分布如下，花括号是整数，方括号是1/2 像素 圆括号是 1/4
+    1/2 都是由 six_tap_fliter 得到的
+    1/4 都是由周围最近的两个 1/2 或者 整数像素 求平均值
+
+                    {A}     [aa]     {B}                
+
+
+
+                    {C}     [bb]     {D}
+       
+       
+                  ------------------ -----------------------
+    {E}     {F}   | {G} (a) [b] (c)| {H}       {I}       {J}
+                  | (d) (e) (f) (g)| 
+    [cc]    [dd]  | [h] (i) [j] (k)| [m]       [ee]      [ff]
+                  | (n) (p) (q) (r)|
+                  ------------------
+    {K}     {L}   | {M}     [s]      {N}       {P}       {Q}
+                  |
+                  |
+                  |
+                  | {R}     [gg]     {S}
+                  |
+                  |
+                  |
+                  | {T}     [hh]     {U}
+*/
+
+
+// f-full, h-half, q-qualter
+static int
+A_1 , A_0 , A_f ,   aa_h,    B_f , B_0 , B_1 , 
+C_1 , C_0 , C_f ,   bb_h,    D_f , D_0 , D_1 , 
+E_f , F_f , G_f,a_q,b_h,c_q, H_f , I_f , J_f , 
+            d_q,e_q,f_q,g_q, 
+cc_h, dd_h, h_h,i_q,j_h,k_q, m_h , ee_h, ff_h, 
+            n_q,p_q,q_q,r_q, 
+K_f , L_f , M_f,    s_h,     N_f , P_f , Q_f , 
+R_1 , R_0 , R_f ,   gg_h,    S_f , S_0 , S_1 ,
+T_1 , T_0 , T_f ,   hh_h,    U_f , U_0 , U_1 ;
+
+#define calc_h h_h = Clip1Y((six_tap_filter(A_f, C_f, G_f, M_f, R_f, T_f) + 16) >> 5, BitDepthY)
+#define calc_s s_h = Clip1Y((six_tap_filter(K_f, L_f, M_f, N_f, P_f, Q_f) + 16) >> 5, BitDepthY)
+#define calc_m m_h = Clip1Y((six_tap_filter(B_f, D_f, H_f, N_f, S_f, U_f) + 16) >> 5, BitDepthY)
+#define calc_b b_h = Clip1Y((six_tap_filter(E_f, F_f, G_f, H_f, I_f, J_f) + 16) >> 5, BitDepthY)
+#define calc_j j_h = Clip1Y((six_tap_filter(aa_h, bb_h, six_tap_filter(E_f, F_f, G_f, H_f, I_f, J_f), six_tap_filter(K_f, L_f, M_f, N_f, P_f, Q_f), gg_h, hh_h) + 512) >> 10, BitDepthY)
+
 //分数像素内插，大写字母都是整数像素，小写字母都是分数像素
 int Prediction_Inter_LumaSampleInterpolation(\
     int xIntL,  int yIntL,\
@@ -185,88 +242,153 @@ int Prediction_Inter_LumaSampleInterpolation(\
     int PicWidthInMbs, int PicHeightInMbs,\
     picture* ref_pic, int BitDepthY)
 {
-    // int A = 0, B = 0, C = 0, D = 0, E = 0, F = 0, G = 0, H = 0, I = 0, J = 0,\
-    //     K = 0, L = 0, M = 0, N = 0, P = 0, Q = 0, R = 0, S = 0, T = 0, U = 0;
-    // int* sampleX[20] = {&A,&B,&C,&D,&E,&F,&G,&H,&I,&J,&K,&L,&M,&N,&P,&Q,&R,&S,&T,&U};
     int PicWidthInSample  = PicWidthInMbs  * 16;
     int PicHeightInSample = PicHeightInMbs * 16;
-    auto func = [xIntL, yIntL, ref_pic, PicWidthInSample, PicHeightInSample](int xDZL, int yDZL)->int{
+    auto func = [xIntL, yIntL, ref_pic, PicWidthInSample, PicHeightInSample](int xDZL, int yDZL)
+    ->int
+    {
         int sample = 0;
         int xZL = 0, yZL = 0;
 
-        xZL = Clip3(0, PicWidthInSample -1, xIntL + xDZL);
+        xZL = Clip3(0, PicWidthInSample -1,  xIntL + xDZL);
         yZL = Clip3(0, PicHeightInSample -1, yIntL + yDZL);
-        int8 data_out;
-        sample = (int)(ref_pic->cons->get(xZL, yZL));
-        return sample;
+        return (int)ref_pic->cons[0][yZL][xZL];
     };
-    //如果分数都是0，那么直接返回G样点，不做后续的计算
-    G__ = func(xyDZL[6][0], xyDZL[6][1]);
-    if(xFracL == 0 && yFracL == 0) return G__;
-
-    for (uint8_t i = 0; i < 20; i++)
-    {
-        *(sampleX[i]) = func(xyDZL[i][0], xyDZL[i][1]);
-    }
-
-    int A1 = func(-2,-2), A0 = func(-1, -2), B0 = func(2, -2), B1 = func(3, -2);
-    int C1 = func(-2,-2), C0 = func(-1, -2), D0 = func(2, -2), D1 = func(3, -2);
-    int R1 = func(-2, 2), R0 = func(-1,  2), S0 = func(2, -2), S1 = func(3, -2);
-    int T1 = func(-2, 3), T0 = func(-1,  3), U0 = func(2, -3), U1 = func(3, -3);
-
+    A_1 = func(-2, -2);A_0 = func(-1, -2);A_f = func(0, -2);B_f = func(1, -2);B_0 = func(2, -2);B_1 = func(3, -2);
+    C_1 = func(-2, -1);C_0 = func(-1, -1);C_f = func(0, -1);D_f = func(1, -1);D_0 = func(2, -1);D_1 = func(3, -1);
+    E_f = func(-2,  0);F_f = func(-1,  0);G_f = func(0,  0);H_f = func(1,  0);I_f = func(2,  0);J_f = func(3,  0);
+    K_f = func(-2,  1);L_f = func(-1,  1);M_f = func(0,  1);N_f = func(1,  1);P_f = func(2,  1);Q_f = func(3,  1);
+    R_1 = func(-2,  2);R_0 = func(-1,  2);R_f = func(0,  2);S_f = func(1,  2);S_0 = func(2,  2);S_1 = func(3,  2);
+    T_1 = func(-2,  3);T_0 = func(-1,  3);T_f = func(0,  3);U_f = func(1,  3);U_0 = func(2,  3);U_1 = func(3,  3);
+    
     // printf(">>Inter: insert sample:\n");
     // printf("        int pos :xIntL  yIntL  (%3d, %3d)\n", xIntL, yIntL);
     // printf("        fra pos :xFracL yFracL (%3d, %3d)\n", xFracL, yFracL);
-    // printf("        %d, %d,  %d, %d, %d, %d\n", A1, A0, A, B, B0, B1);
-    // printf("        %d, %d,  %d, %d, %d, %d\n", C1, C0, C, D, D0, D1);
-    // printf("        %d, %d, [%d, %d, %d, %d]\n", E, F, G, H, I, J);
-    // printf("        %d, %d, [%d, %d, %d, %d]\n", K, L, M, N, P, Q);
-    // printf("        %d, %d, [%d, %d, %d, %d]\n", R1, R0, R, S, S0, S1);
-    // printf("        %d, %d, [%d, %d, %d, %d]\n", T1, T0, T, U, U0, U1);
+    // printf("        %d, %d,  %d, %d, %d, %d\n",  A_1, A_0, A_f, B_f, B_0, B_1);
+    // printf("        %d, %d,  %d, %d, %d, %d\n",  C_1, C_0, C_f, D_f, D_0, D_1);
+    // printf("        %d, %d, [%d, %d, %d, %d]\n", E_f, F_f, G_f, H_f, I_f, J_f);
+    // printf("        %d, %d, [%d, %d, %d, %d]\n", K_f, L_f, M_f, N_f, P_f, Q_f);
+    // printf("        %d, %d, [%d, %d, %d, %d]\n", R_1, R_0, R_f, S_f, S_0, S_1);
+    // printf("        %d, %d, [%d, %d, %d, %d]\n", T_1, T_0, T_f, U_f, U_0, U_1);
     // printf("==Inter: \n");
-
-
-    int aa = SixTapFliter(A1, A0,   A__, B__, B0, B1);
-    int bb = SixTapFliter(C1, C0,   C__, D__, D0, D1);
-    int gg = SixTapFliter(R1, R0,   R__, S__, S0, S1);
-    int hh = SixTapFliter(T1, T0,   T__, U__, U0, U1);
-    int b1 = SixTapFliter(E__, F__, G__, H__, I__, J__);
-    int h1 = SixTapFliter(A__, C__, G__, M__, R__, T__);
-    int s1 = SixTapFliter(K__, L__, M__, N__, P__, Q__);
-    int m1 = SixTapFliter(B__, D__, H__, N__, S__, U__);
-    int b = Clip1Y((b1 + 16) >> 5, BitDepthY);
-    int h = Clip1Y((h1 + 16) >> 5, BitDepthY);
-
-
-    int j1 = SixTapFliter(aa, bb, b1, s1, gg, hh);
-    int j = Clip1Y((j1 + 512) >> 10, BitDepthY);
-
-    int s = Clip1Y((s1 + 16) >> 5, BitDepthY);
-    int m = Clip1Y((m1 + 16) >> 5, BitDepthY);
-
-    int a = (G__+ b + 1) >> 1;
-    int c = (H__+ b + 1) >> 1;
-    int d = (G__+ h + 1) >> 1;
-    int n = (M__+ h + 1) >> 1;
-    int f = (b + j + 1) >> 1;
-    int i = (h + j + 1) >> 1;
-    int k = (j + m + 1) >> 1;
-    int q = (j + s + 1) >> 1;
-
-    int e = (b + h + 1) >> 1;
-    int g = (b + m + 1) >> 1;
-    int p = (h + s + 1) >> 1;
-    int r = (m + s + 1) >> 1;
-
-    int* predPart[4][4] = 
+    /*
+        h_h = Clip1Y((six_tap_filter(A_f, C_f, G_f, M_f, R_f, T_f) + 16) >> 5, BitDepthY); 
+        b_h = Clip1Y((six_tap_filter(E_f, F_f, G_f, H_f, I_f, J_f) + 16) >> 5, BitDepthY);
+    
+    */
+    if(xFracL == 0)
     {
-        {&G__, &d, &h, &n},
-        {&a  , &e, &i, &p},
-        {&b  , &f, &j, &q},
-        {&c  , &g, &k, &r}
-    };
-    // printf(">>Inter: result: %d\n", *(predPart[xFracL][yFracL]));
-    return *(predPart[xFracL][yFracL]);
+        // 需要 G
+        if(yFracL == 0) return G_f;
+        // 需要 A C G M R T
+        calc_h;
+        if(yFracL == 1)
+        {
+            // 需要 G h
+            return d_q = two_tap_filter(G_f, h_h);
+        }
+        if(yFracL == 2) 
+            // 需要 h
+            return h_h;
+        if(yFracL == 3) 
+        {
+            // 需要 M h
+            return n_q = two_tap_filter(M_f, h_h);
+        }
+    }
+    else if(xFracL == 1)
+    {
+        calc_b;
+        if(yFracL == 0)
+        {
+            return a_q = two_tap_filter(G_f, b_h);// 需要 G b 
+        }
+        // h 需要 A C G M R T
+        calc_h;
+        if(yFracL == 1)
+        {
+            // b 需要 E F G H I J
+            // 需要 b h
+            return e_q = two_tap_filter(b_h, h_h);
+        }
+        calc_s;
+        if(yFracL == 2)
+        {
+            // j 需要aa bb b s gg hh
+            aa_h = six_tap_filter(A_1, A_0, A_f, B_f, B_0, B_1);
+            bb_h = six_tap_filter(C_1, C_0, C_f, D_f, D_0, D_1);
+            
+            gg_h = six_tap_filter(R_1, R_0, R_f, S_f, S_0, S_1);
+            hh_h = six_tap_filter(T_1, T_0, T_f, U_f, U_0, U_1);
+            calc_j;
+            // 需要 h j
+            return i_q = two_tap_filter(h_h, j_h);
+        }
+        if(yFracL == 3)
+        {
+            // 需要 h s
+            return p_q = two_tap_filter(h_h, s_h);
+        }
+    }
+    else if(xFracL == 2)
+    {
+        calc_b;
+        if(yFracL == 0)
+        {
+            return b_h;
+        }
+        // j 需要aa bb b s gg hh
+        aa_h = six_tap_filter(A_1, A_0, A_f, B_f, B_0, B_1);
+        bb_h = six_tap_filter(C_1, C_0, C_f, D_f, D_0, D_1);
+        calc_s;
+        gg_h = six_tap_filter(R_1, R_0, R_f, S_f, S_0, S_1);
+        hh_h = six_tap_filter(T_1, T_0, T_f, U_f, U_0, U_1);
+        calc_j;
+        if(yFracL == 1)
+        {
+            // 需要 b j
+            return f_q = two_tap_filter(b_h, j_h);
+        }
+        if(yFracL == 2)
+        {
+            return j_h;
+        }
+        if(yFracL == 3)
+        {
+            return two_tap_filter(j_h, s_h);
+        }
+    }
+    else if(xFracL == 3)
+    {
+        calc_b;
+        if(yFracL == 0)
+        {
+            return c_q = two_tap_filter(b_h, H_f);
+        }
+        calc_m;
+        if(yFracL == 1)
+        {
+            return g_q = two_tap_filter(b_h, m_h);
+        }
+        calc_s;
+        if(yFracL == 2)
+        {
+            // j 需要aa bb b s gg hh
+            aa_h = six_tap_filter(A_1, A_0, A_f, B_f, B_0, B_1);
+            bb_h = six_tap_filter(C_1, C_0, C_f, D_f, D_0, D_1);
+            
+
+            gg_h = six_tap_filter(R_1, R_0, R_f, S_f, S_0, S_1);
+            hh_h = six_tap_filter(T_1, T_0, T_f, U_f, U_0, U_1);
+            calc_j;
+            
+            return k_q = two_tap_filter(j_h, m_h);
+        }
+        if(yFracL == 3)
+        {
+            return r_q = two_tap_filter(s_h, m_h);
+        }
+    }
 }
 void Prediction_Inter(\
     macroblock* current, matrix& out, \
@@ -274,15 +396,16 @@ void Prediction_Inter(\
     int BitDepthY,\
     uint8_t mbPartIdx, uint8_t subMbPartIdx,\
     uint8_t width_part, uint8_t height_part,\
-    picture* ref_pic, MotionVector **mv_lx, bool predFlag)
+    picture* ref_pic, MotionVector **mv_lx
+)
 {
     type_macroblock type = current->type;
     int part = current->num_mb_part;
 
     int mvLX[2] = {mv_lx[mbPartIdx][subMbPartIdx][0], mv_lx[mbPartIdx][subMbPartIdx][1]};
     //xAL 是子块、子子块的图片中的绝对起始坐标
-    int yAL = current->pos.x * 16, yBL = 0;
-    int xAL = current->pos.y * 16, xBL = 0;
+    int yAL = current->pos.y * 16, yBL = 0;
+    int xAL = current->pos.x * 16, xBL = 0;
     //xL yL 是在块中的坐标
     int xL = 0, yL = 0, xFracL = 0, yFracL = 0;
     int xIntL = 0, yIntL = 0;
@@ -302,21 +425,24 @@ void Prediction_Inter(\
     }
     
     //下面这步是直接求并和移位（负数也是，不需要处理）
+    // 不用求符号和无符号数来解，直接用负数做运算
     xFracL = (mvLX[0] & 3); 
     yFracL = (mvLX[1] & 3);/*Sig(mvLX[1]) */ 
     xBL = xAL + (mvLX[0] >> 2); 
     yBL = yAL +  /*Sig(mvLX[1]) **/ (mvLX[1] >> 2);
     //每一个样点都需要内插
-    for(uint8_t yL = 0; yL < height_part; yL++)
+    for(yL = 0; yL < height_part; yL++)
     {
-        for(uint8_t xL = 0; xL < width_part; xL++)
+        for(xL = 0; xL < width_part; xL++)
         {
             //加上运动矢量的整数坐标
             //对应在参考图片中的起始坐标加上块内的坐标分别得到整数绝对坐标
             xIntL = xBL + xL;
             yIntL = yBL + yL;
             //前向参考直接加到预测样点矩阵中，
-            out[yL][xL] += Prediction_Inter_LumaSampleInterpolation(xIntL, yIntL, xFracL, yFracL,PicWidthInMbs,PicHeightInMbs, ref_pic, BitDepthY );
+            out[yL][xL] =\
+             Prediction_Inter_LumaSampleInterpolation(xIntL, yIntL, xFracL, yFracL,PicWidthInMbs,PicHeightInMbs, ref_pic, BitDepthY );
+            // printf("(%2d, %2d)value : %d\n", xL, yL, out[yL][xL]);
         }
     }
 }

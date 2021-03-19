@@ -5,6 +5,11 @@
 #include "slice.h"
 #include <vector>
 #include <algorithm>
+
+#include "terror.h"
+#include "gvars.h"
+#include "gfunc.h"
+
 void decoder::print_list()
 {
     
@@ -482,6 +487,9 @@ void decoder::out_DecodedBuf()
 {
 
 }
+
+#include <opencv2/opencv.hpp>
+using namespace cv;
 void decoder::out_DecodedPic()
 {
     //由栈来管理和输出缓冲的pic
@@ -498,15 +506,15 @@ void decoder::out_DecodedPic()
     {
         // 输出图像
 
-        // if(chagpic)//是否输出字符画的控制
-        // {
-        //     list_Out.top()->print_complete();
-        //     list_Out.top()->chs_MbToOutmatrix();      //pic字符化
-
-        //     // std::cout << *list_Out.top() << std::endl;//输出pic
-
-        // }
-        // printf(">>decder: current out pic : POC:%4d\n", list_Out.top()->POC);
+        if(terr.pic_terminalchar())//是否输出字符画的控制
+        {
+            // list_Out.top()->drawpic();      //pic字符化
+            picture* pic = list_Out.top();
+            printf(">>decder: current out pic : POC:%4d\n", list_Out.top()->POC);
+            Mat frame(pic->cons->h, pic->cons->w, CV_8UC1, pic->cons->data);
+            imshow("out", frame);
+            waitKey(1);
+        }
         
         // 输出完毕
         list_Out.top()->state_out = true;//输出之后的 pic 输出状态全部变为 已经输出
@@ -517,6 +525,9 @@ void decoder::out_DecodedPic()
 }
 decoder::decoder()
 {
+
+    namedWindow("out", cv::WINDOW_NORMAL);
+
     count_Out = 0;
     curPIC = NULL;
     curSLI = NULL;

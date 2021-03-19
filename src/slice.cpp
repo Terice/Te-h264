@@ -12,6 +12,9 @@
 #include <vector>
 #include "gfunc.h"
 
+#include "gvars.h"
+#include "terror.h"
+
 uint32 NextMbAddress(uint32 add){return 0;}
 uint32 more_rbsp_data(){return 1;}
 
@@ -23,9 +26,11 @@ int num_ref_idx_l1_active_minus1);
 slice::slice(parser* p, decoder* d, picture* pic)
 {
     next = NULL;
+    hedMB = NULL;
     
     pw = NULL;
     ps = new ParameterSets;
+    this->pic = pic;
     this->de = d;
     this->pa = p;
     ps->pps = (pa->pS->pps);
@@ -278,6 +283,8 @@ void slice::ParseSliceHead()
     if(ps->pps->entropy_coding_mode_flag && type != I && type != SI){
         ps->cabac_init_idc                   = pa->read_ue();
     }
+    else
+        ps->cabac_init_idc = 0;
     ps->slice_qp_delta                       = pa->read_se();
     if(type == SP || type == SI){
         //switch解码
@@ -321,11 +328,15 @@ void slice::ParseSliceHead()
 };
 void slice::ConsRefList()
 {
+    pic->FrameNum = ps->frame_num;
+    //解码picture numbers
+    de->calc_PictureNum();
+
     //初始化参考列表，把 pic_current 指针加入到相应的参考列表中去
     //解I帧不需要参考，只需要标记
     //初始化参考表(根据上一次的标记)
     if(type == P || type == SP || type == B)
-    de->init_RefPicList();
+        de->init_RefPicList();
 
     //修改
     //操作符在 decoder 中已经指定和如何移除，所以这里不用做是否启用这个函数的判定
@@ -355,25 +366,35 @@ void slice::ParseSliceData()
     //片数据对齐
     if(ps->pps->entropy_coding_mode_flag) pa->read_al();
 
+
+    // if(index == 43)
+    //     terr.de.cabac_state_running = true;
+        
+
+    int width_mb = pa->pV->PicWidthInMbs;
+    int heigh_mb = pa->pV->PicHeightInMbs;
     do{
 
         //跳过编码只是不解析而已，但是同样需要数据块、解码
-        macroblock* mb = new macroblock(this, pa);
+        macroblock* mb = new macroblock(this, pa, de);
         
         // slice的统计由parser完成
         mb->idx_slice = pa->index_cur_slice;
 
         mb->idx_inslice = index_MbInSlcie++;
+
         
         // 宏块坐标的统计必须由slice来完成
         // 而不是由picture来完成，
         // 因为图片无法知道下一个宏块的坐标是什么，只有slice能推导出回来
         mb->pos.x = x_cur;
         mb->pos.y = y_cur;
-        if(++x_cur >= pa->pV->PicWidthInMbs) {x_cur = 0; y_cur++;}
+        if(++x_cur >= width_mb) {x_cur = 0; ++y_cur;}
 
         mb->idx_inpicture = index_MbInPicture++;//index_MbInPicture这个变量不应该设置在slice里面，现在还没有改过来
     
+
+
         // 宏块加入pic同时找到属于自己的数据并且连接起来
         // 在这里找到了他的pic，
         // 宏块应该自己去寻找自己的内存，而不是由picture带着找
@@ -386,6 +407,8 @@ void slice::ParseSliceData()
         if(this->hedMB == NULL) 
         {
             hedMB = mb;
+            // QPY prev 指的是slice中上一个宏块的量化参数 QPY 
+            // 如果是第一个宏块，那么QPY_prev就是SliceQPY的值
             mb->qp.QPY_prev = this->ps->SliceQPY;
         }
         else
@@ -395,6 +418,8 @@ void slice::ParseSliceData()
         }
         //设置curMB为当前宏块
         curMB = mb;
+
+        mb->mb_skip_flag = 0;
         if(type != I && type != SI)
         {
             // 这个if还没有具体实现，因为默认用ae算子
@@ -453,6 +478,8 @@ void slice::ParseSliceData()
                 //if(ps->end_of_slice_flag == 1)  printf(">>slice: end mb: (%d,%d)\n", mb->position_x, mb->position_y);
             }
         }
+        if(y_cur == heigh_mb && !ps->end_of_slice_flag) 
+            break;
     }while(moreDataFlag);
     pa->index_cur_slice += 1;
 
