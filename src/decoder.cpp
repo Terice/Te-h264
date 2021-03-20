@@ -511,9 +511,11 @@ void decoder::out_DecodedPic()
             // list_Out.top()->drawpic();      //pic字符化
             picture* pic = list_Out.top();
             printf(">>decder: current out pic : POC:%4d\n", list_Out.top()->POC);
-            Mat frame(pic->cons->h, pic->cons->w, CV_8UC1, pic->cons->data);
-            imshow("out", frame);
-            waitKey(1);
+
+            // Mat frame(pic->cons->h, pic->cons->w, CV_8UC1, pic->cons->data);
+            // imshow("out", frame);
+            // waitKey(1);
+
         }
         
         // 输出完毕
