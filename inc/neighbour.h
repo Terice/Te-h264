@@ -8,6 +8,13 @@ void neighbour_macroblock(
     macroblock **result
 );
 
+
+void col_located_4x4_sub_Partions(\
+    macroblock *current, int mbPartIdx, int subPartIdx,\
+    bool direct_8x8_inference_flag, picture *colPic,\
+    MotionVector mvCol, int *refIdxCol
+);
+
 /**
  * @param current 当前宏块
  * @param mbPartIdx 块索引
@@ -18,6 +25,12 @@ void neighbour_macroblock(
 void neighbour_motionvector(
     macroblock *current, int mbPartIdx, int subPartIdx,\
     int direction, MotionVector **mv_lx
+);
+
+void neighbour_motionvector_data(
+    macroblock *current, int mbPartIdx, int subPartIdx,\
+    int direction, MotionVector **mv_lx,\
+    int *refIdxLXN
 );
 
 // 计算 16x16 宏块中的相邻 part

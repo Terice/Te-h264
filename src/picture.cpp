@@ -69,6 +69,7 @@ void picture::deocde()
     print();
 
     std::cout << count_pic++ << std::endl;
+    drawpic();
 
     if(count_mb < mb->w * mb->h)
     {
@@ -232,7 +233,6 @@ void picture::drawpic()
     FILE *fp = fopen("frame", "w");
     fwrite(cons->data, cons->w * cons->h, sizeof(char), fp);
     fclose(fp);
-
 
     // char tmp = 0;
     // for (size_t y = 0; y < out_h; y += hei_scal)

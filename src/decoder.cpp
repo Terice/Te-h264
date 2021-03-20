@@ -512,9 +512,9 @@ void decoder::out_DecodedPic()
             picture* pic = list_Out.top();
             printf(">>decder: current out pic : POC:%4d\n", list_Out.top()->POC);
 
-            // Mat frame(pic->cons->h, pic->cons->w, CV_8UC1, pic->cons->data);
-            // imshow("out", frame);
-            // waitKey(1);
+            Mat frame(pic->cons->h, pic->cons->w, CV_8UC1, pic->cons->data);
+            imshow("out", frame);
+            waitKey(1);
 
         }
         
@@ -528,7 +528,7 @@ void decoder::out_DecodedPic()
 decoder::decoder()
 {
 
-    namedWindow("out", cv::WINDOW_NORMAL);
+    // namedWindow("out", cv::WINDOW_NORMAL);
 
     count_Out = 0;
     curPIC = NULL;

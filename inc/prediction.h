@@ -66,8 +66,8 @@ int  Prediction_Inter_LumaSampleInterpolation(\
 // 帧间预测direct模式
 int Prediction_Inter_Direct(\
     macroblock* current,\
-    int mbPartIdx, int subMbPartIdx,\
-    parser* pa, decoder *de, picture* pic\
+    int mbPartIdx,\
+    parser* pa, decoder *de
 );
 void Weight_CoefficWeight(
     bool is_explicit,\

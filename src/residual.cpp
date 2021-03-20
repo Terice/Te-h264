@@ -21,7 +21,10 @@ residual::residual(macroblock *m, parser* p)
 {
     this->mb = m;
     this->pa = p;
-    
+
+
+    luma = NULL;
+    chroma = NULL;
     codedPatternLuma = m->CodedBlockPatternLuma;
     codedPatternchroma = m->CodedBlockPatternChroma;
     this->TransformBypassModeFlag = m->TransformBypassModeFlag;
@@ -39,12 +42,13 @@ residual::~residual()
     // 因为残差数据是由pic管理的
 
     // 需要释放放着变换系数的block
-    delete[] luma;
-    delete[] chroma;
+    if(luma)   delete[] luma;
+    if(chroma) delete[] chroma;
 }
 void residual::decode()
 {    
-
+    if(mb->mb_skip_flag) return;
+    if(mb->type == I_PCM) return;
     ParseHead();
     DecodeData();
 }

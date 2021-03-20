@@ -37,7 +37,6 @@ void trans_adddelta(char direction, int xP, int yP, int width, int *xN, int *yN)
     case 'B':xD =  0;    yD = -1; break;
     case 'C':xD = width; yD = -1; break;
     case 'D':xD = -1;    yD = -1; break;
-    default:break;
     }
     *xN = xP + xD;
     *yN = yP + yD;
@@ -110,6 +109,7 @@ void neighbour_position_sub(\
 }
 
 // 计算目标宏块内起始坐标在目标宏块内的 两级 索引
+// 在其中已经处理了 I 、 P_8x8 B_8x8 、 B_Skip B_Direct_16x16
 void neighbour_indice_sub(int xP, int yP, macroblock *N, int *mbPartIdx, int *subPartIdx)
 {
     if(!N) return;// 如果是NULL直接返回表示不可用
@@ -118,15 +118,18 @@ void neighbour_indice_sub(int xP, int yP, macroblock *N, int *mbPartIdx, int *su
     if(type < TYPE_MACROBLOCK_START_INDEX_P) *mbPartIdx = 0;
     else *mbPartIdx = (16/MbPartWidth(type)) * (yP/MbPartHeight(type)) +(xP/MbPartWidth(type));
 
+    // 如果有子块
     if(type == P_8x8 || type == B_8x8 || type == P_8x8ref0)
     {
         type_submacroblock sub = N->inter->sub[*mbPartIdx].type;
         *subPartIdx = (8/SubMbPartWidth(sub))*((yP%8)/SubMbPartHeight(sub))+(xP%8)/SubMbPartWidth(sub);
     }
+    // B_Skip 块 和 B_Direct_16x16 都是 4 分然后再 4分，一共 16 块
     else if(type == B_Skip || type == B_Direct_16x16)
     {
         *subPartIdx = 2*((yP % 8)/4)+((xP % 8)/4);
     }
+    // 否则说明没有子块，这个直接赋值为0
     else *subPartIdx = 0;
 }
 void neighbour_indice_luma4x4(int xP, int yP, int *luma4x4BlkIdx)
@@ -145,9 +148,43 @@ void neighbour_macroblock(macroblock *current, char direction, macroblock **resu
 {
     *result = trans_macroblock(current, direction);
 }
+void col_located_4x4_sub_Partions(\
+    macroblock *current, int mbPartIdx, int subPartIdx,\
+    bool direct_8x8_inference_flag, picture *colPic,\
+    MotionVector mvCol, int *refIdxCol
+)
+{
+    int x, y;
+    macroblock *colMb;
+    x = current->pos.x; y = current->pos.y;
+    colMb = (*colPic->mb)[y][x];
+    
+    if(colMb->is_intrapred())
+    {
+        mvCol[0] = 0;
+        mvCol[1] = 0;
+        *refIdxCol = -1;
+    }
+    else
+    {
+        // 先简单设置为 0 0 0 
+        mvCol[0] = colMb->inter->mv.mv_l0[0][0][0];
+        *refIdxCol = 0;
+    }
+}
+// 计算周围的运动矢量，此时不需要参考索引
 void neighbour_motionvector(
     macroblock *current, int mbPartIdx, int subPartIdx,\
     int listSuffixFlag, MotionVector **mv_lX
+)
+{
+    int tmp[3];
+    neighbour_motionvector_data(current, mbPartIdx, subPartIdx, listSuffixFlag, mv_lX, tmp);
+}
+void neighbour_motionvector_data(
+    macroblock *current, int mbPartIdx, int subPartIdx,\
+    int listSuffixFlag, MotionVector **mv_lX,\
+    int *refIdxLXN
 )
 {
     macroblock* A = NULL;
@@ -167,12 +204,13 @@ void neighbour_motionvector(
     int8* ref_idx_lx = listSuffixFlag == 1 ? current->inter->ref_idx_l1 : current->inter->ref_idx_l0;
     int refIdxLX = ref_idx_lx[mbPartIdx];
 
-    auto f_1 = [&current, listSuffixFlag, mbPartIdx, subPartIdx, Pred_LX](char direction, int& mbPartIdx_N, int& subPartIdx_N, int& refIdxLX_N, int mv_lx_N[2])->macroblock*
+    auto f_1 = [&current, listSuffixFlag, mbPartIdx, subPartIdx, Pred_LX](char direction, int& mbPartIdx_N, int& subPartIdx_N, int& refIdxLX_N, int mv_lx_N[2])
+    ->macroblock*
     {
         macroblock* N ;//=  get_PartNeighbour(current, direction, 0x010, mbPartIdx, subPartIdx, mbPartIdx_N, subPartIdx_N);
         neighbour_part_16x16(current, mbPartIdx, subPartIdx, direction, &N, &mbPartIdx_N, &subPartIdx_N);
         int refIdx = -1;
-        // 如果 N 不可用 || 是帧内 || 不预测
+        // 如果 N 不可用 || 是帧内 || 这个方向不预测
         // 那么就直接返回
         uint8_t predFlagLX = PredFlag(N, mbPartIdx_N, listSuffixFlag);
         if(!current->is_avaiable(N) || N->is_intrapred() || !predFlagLX)
@@ -229,6 +267,7 @@ void neighbour_motionvector(
         mv_lx_C[1] = mv_lx_D[1];
     }
     // 这里只是计算 prediction 的值，所以传入的是mvp
+    // 计算周围的运动矢量
     if(partWidth == 16 && partHeight == 8 && mbPartIdx == 0 && refIdxLX_B == refIdxLX) 
     {
         mv_lX[mbPartIdx][subPartIdx][0] = mv_lx_B[0];
@@ -275,6 +314,10 @@ void neighbour_motionvector(
             mv_lX[mbPartIdx][subPartIdx][1] = Median(mv_lx_A[1], mv_lx_B[1], mv_lx_C[1]);
         }
     }
+    refIdxLXN[0] = refIdxLX_A;
+    refIdxLXN[1] = refIdxLX_B;
+    refIdxLXN[2] = refIdxLX_C;
+    
     return ;
 }
 

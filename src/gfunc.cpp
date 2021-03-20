@@ -59,11 +59,40 @@ int MallocMotionVectorPkg_P(MotionVector_info *m, int MbPart, SubMacroBlock* Sub
 
 }
 
-int MallocMotionVectorPkg_B(MotionVector_info *m, int MbPart, SubMacroBlock* SubPart)
+int MallocMotionVectorPkg_Direct(MotionVector_info *m)
 {
+    //Direct直接做mv，其他的不做
+    m->mvd_l0 = NULL;
+    m->mvd_l1 = NULL;
+    m->mvp_l0 = NULL;
+    m->mvp_l1 = NULL;
+    
+    m->mv_l1 = new MotionVector*[4];
+    m->mv_l0 = new MotionVector*[4];
+    for (int i = 0; i < 4; i++)
+    {
+        m->mv_l0[i] = new MotionVector[4];
+    }
+    m->mv_l1 = new MotionVector*[4];
+    for (int i = 0; i < 4; i++)
+    {
+        m->mv_l1[i] = new MotionVector[4];
+    }
+}
+int FreeMotionVectorPkg_Direct(MotionVector_info *m)
+{
+    for (int i = 0; i < 4; i++)
+    {
+        delete[] m->mv_l0[i];
+    }
+    for (int i = 0; i < 4; i++)
+    {
+        delete[] m->mv_l1[i];
+    }
+    delete[] m->mv_l0;
+    delete[] m->mv_l1;
     
 }
-
 int MallocMotionVectorPkg(MotionVector_info *m, int MbPart, SubMacroBlock* SubPart)
 {
     MallocMotionVector(&m->mv_l0,  MbPart, SubPart);
@@ -140,6 +169,7 @@ int SubMbPartHeight(type_submacroblock type){return (int)SubMacroBlockChart[type
 bool PredFlag(macroblock* m, uint8 MbPartIdx, uint8 flag)
 {
     if(!m) return false;
+    if(m->type == B_Skip || m->type == B_Direct_16x16) return true;
 
     auto Pred_LX = flag ? Pred_L1 : Pred_L0;
     predmode_mb_part premode = MbPartPredMode(m->type, MbPartIdx);

@@ -26,7 +26,10 @@ extern int MallocMotionVectorPkg(MotionVector_info *m, int MbPart, SubMacroBlock
 // 如果没有 SubPart 的话， 传入NULL
 extern int   FreeMotionVectorPkg(MotionVector_info *m, int MbPart, SubMacroBlock* SubPart);
 
+extern int MallocMotionVectorPkg_Direct(MotionVector_info *m);
 
+
+extern int FreeMotionVectorPkg_Direct(MotionVector_info *m);
 
 macroblock::macroblock(slice* parent, parser* parser, decoder *d)
 {
@@ -63,6 +66,11 @@ macroblock::~macroblock()
         if(predmode == Intra_4x4)      delete intra->predinfo.intra4x4;
         else if(predmode == Intra_8x8) delete intra->predinfo.intra8x8; 
         delete intra;
+    }
+    else if(type == B_Skip || type == B_Direct_16x16)
+    {
+        FreeMotionVectorPkg_Direct(&inter->mv);
+        delete inter;
     }
     else
     {
@@ -102,13 +110,16 @@ void macroblock::decode()
     re->decode();
     // 解析残差的时候就已经可以解码出来残差(所有的残差)了，
     // 所以说解码 4x4 时重建图像拿到小块就可以重建图像了
-    // if(pos.x == 0 && pos.y == 16)
-    //     int a = 0;
     DecodeData();
+    
+    
+    // if(idx_slice == 2 && pos.y == 0 && pos.x == 20)
+    // {
     // std::cout << pred[0] << std::endl;
     // std::cout << resi[0] << std::endl;
     // std::cout << cons[0] << std::endl;
     // std::cout << "x,y :" << pos.x << " " << pos.y << std::endl;
+    // }
     // 解码到这里就结束了
     // 呼～～，结束了
 }
@@ -261,10 +272,7 @@ void macroblock::Parse_Sub(int* noSubMbPartSizeLessThan8x8Flag)
             }
         else if(sub[mbPartIdx].type == B_Direct_8x8)
         {
-            for(uint8_t subMbPartIdx = 0; subMbPartIdx < 4; subMbPartIdx++)
-            {
-                Prediction_Inter_Direct(this, mbPartIdx, subMbPartIdx, pa,de,pic);
-            }
+            Prediction_Inter_Direct(this, mbPartIdx, pa,de);
         }
     }
     if(sl->type == B)
@@ -298,10 +306,7 @@ void macroblock::Parse_Sub(int* noSubMbPartSizeLessThan8x8Flag)
                 }
             else if(sub[mbPartIdx].type == B_Direct_8x8)
             {
-                for(uint8_t subMbPartIdx = 0; subMbPartIdx < 4; subMbPartIdx++)
-                {
-                    Prediction_Inter_Direct(this, mbPartIdx, subMbPartIdx, pa,de,pic);
-                } 
+                Prediction_Inter_Direct(this, mbPartIdx, pa,de);
             }
     }
     //--------------------------------------------------------子宏块预测结束
@@ -379,12 +384,12 @@ void macroblock::Parse_Skip()
     }
     else
     {
-        num_mb_part = 4;
-        MallocMotionVectorPkg(&inter->mv, 4, NULL);
+        num_mb_part = 1;
+        MallocMotionVectorPkg_Direct(&inter->mv);
         // 因为会初始化为 0 ，所以参考索引也就不再多操作了。
         for(int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++)
         {
-            Prediction_Inter_Direct(this, mbPartIdx, 0, pa, de, pic);
+            Prediction_Inter_Direct(this, mbPartIdx, pa, de);
         }
 
     }
@@ -405,12 +410,17 @@ void macroblock::Parse_Direct()
     // 所以 B_Skip 和 B_Direct_16x16 需要做 4 次 Direct 预测
     // B_Direct_8x8 需要做 1 次 Direct 预测 (在四分块中)
     // 
-    num_mb_part = 4;
+    num_mb_part = 1;
     inter = new Inter_pred;
     memset(inter, 0, sizeof(Inter_pred));
     
     // 因为需要存 4 个运动矢量
-    MallocMotionVectorPkg(&inter->mv, 4, NULL);
+    MallocMotionVectorPkg_Direct(&inter->mv);
+    for(int mbPartIdx = 0; mbPartIdx < 4; mbPartIdx++)
+    {
+        Prediction_Inter_Direct(this, mbPartIdx,pa, de);
+    }
+    
 }
 void macroblock::Parse_Inter()
 {
@@ -432,11 +442,6 @@ void macroblock::Parse_Inter()
     MotionVector **mv_l0        = inter->mv.mv_l0 ;
     MotionVector **mv_l1        = inter->mv.mv_l1 ;
         
-
-    if(idx_slice == 1 && pos.x == 15)
-    {
-        int a = 0;
-    }
     uint8_t mbPartIdx;
     //读取预测标志位
     for(mbPartIdx = 0; mbPartIdx < num_mb_part; mbPartIdx++)
@@ -742,10 +747,10 @@ void macroblock::Decode_Intra16x16()
 
 void macroblock::Decode_Inter()
 {
-
-    if(idx_slice == 1 && is_interpred() && pos.x == 17)
+    int a = 0;
+    if(idx_slice == 2)
     {
-        int a = 0;
+        a = 1;
     }
     //如果不是16x16直接预测 并且 不是B_Skip宏块
     type_slice slice_type = sl->type;
@@ -804,7 +809,7 @@ void macroblock::Decode_Inter()
             else
             // B_Direct_16x16 和 B_Skip 不会有子子块类型这个属性，子子块都是直接推导出本身的数据
             // 因为 B_Direct_16x16 和 B_Skip 是分成四块， 每一块都不再分，所以只有一块
-                subMbPart = 1;
+                subMbPart = 4;
 
             for (uint8_t subPartIdx = 0; subPartIdx < subMbPart; subPartIdx++)
             {
@@ -814,6 +819,11 @@ void macroblock::Decode_Inter()
                 {
                     width  = SubMbPartWidth(inter->sub[mbPartIdx].type);
                     height = SubMbPartHeight(inter->sub[mbPartIdx].type);
+                }
+                else if(type == B_Direct_16x16 || type == B_Skip)
+                {
+                    width = 4;
+                    height = 4;
                 }
                 matrix tmp_0( width, height, 0), tmp_1( width, height,0);
                 //如果有前向预测，
@@ -841,7 +851,7 @@ void macroblock::Decode_Inter()
                 //如果有后向预测
                 if(predFlag_1)
                 {
-                    if(!de->list_Ref0[ref_idx_l1[mbPartIdx]]) 
+                    if(!de->list_Ref1[ref_idx_l1[mbPartIdx]]) 
                     {
                         printf(">>err  : slice :%d(%2d) macro:(%d, %d)(%2d), partIdx: %d refidx:%d\n", sl->index, sl->type, pos.x, pos.y, mb_type, mbPartIdx,ref_idx_l1[mbPartIdx]);
                         
@@ -858,7 +868,6 @@ void macroblock::Decode_Inter()
                         ref_pic_1, mv_l1
                     );
                 }
-
                 //加权预测
                 uint8_t weighted_pred_flag  = sl->ps->pps->weighted_pred_flag;
                 uint8_t weighted_bipred_idc = sl->ps->pps->weighted_bipred_idc;
@@ -921,6 +930,7 @@ void macroblock::Decode_Inter()
                         }
                     }
                 }
+                
                 //赋值
                 int mb_partWidth = MbPartWidth(type);
                 int mb_partHeigh = MbPartHeight(type);
@@ -928,25 +938,37 @@ void macroblock::Decode_Inter()
                 int sub_mb_partHeigh = 8;
                 int xS = 0;
                 int yS = 0;
-                if(type != B_Direct_16x16 && type != B_Skip)
-                {
-                    if(this->num_mb_part == 4)
+
+                    if(this->num_mb_part == 4 && type != B_Direct_16x16 && type != B_Skip)
                     {
                         sub_mb_partWidth = SubMbPartWidth (inter->sub[mbPartIdx].type);
                         sub_mb_partHeigh = SubMbPartHeight(inter->sub[mbPartIdx].type);
+                        xS = (mbPartIdx % (16 / mb_partWidth    )) * mb_partWidth + \
+                             (subPartIdx% (8  / sub_mb_partWidth)) * sub_mb_partWidth;
+                        yS = (mbPartIdx / (16 / mb_partWidth    )) * mb_partHeigh + \
+                             (subPartIdx/ (8  / sub_mb_partWidth)) * sub_mb_partHeigh;
                     }
-                    xS = (mbPartIdx % (16 / mb_partWidth)) * mb_partWidth +\
-                        (num_mb_part == 4 ? (subPartIdx% (8  / sub_mb_partWidth) * sub_mb_partWidth) : 0);
-                    yS = (mbPartIdx / (16 / mb_partWidth)) * mb_partHeigh +\
-                        (num_mb_part == 4 ? (subPartIdx/ (8  / sub_mb_partWidth) * sub_mb_partHeigh) : 0);
-                }
-                else
-                {
-                    xS = (mbPartIdx % (16 / mb_partWidth)) * mb_partWidth;                                
-                    yS = (mbPartIdx / (16 / mb_partWidth)) * mb_partHeigh;
-                }
-                if(type == B_8x8)
-                    int a = 0;
+                    else if(type == B_Direct_16x16 || type == B_Skip)
+                    {
+                        sub_mb_partWidth = 4;
+                        sub_mb_partHeigh = 4;
+                        xS = (mbPartIdx % (16 / mb_partWidth    )) * mb_partWidth + \
+                             (subPartIdx% (8  / sub_mb_partWidth)) * sub_mb_partWidth;
+                        yS = (mbPartIdx / (16 / mb_partWidth    )) * mb_partHeigh + \
+                             (subPartIdx/ (8  / sub_mb_partWidth)) * sub_mb_partHeigh;
+                    }
+                    else
+                    {
+                        xS = (mbPartIdx % (16 / mb_partWidth    )) * mb_partWidth;
+                        yS = (mbPartIdx / (16 / mb_partWidth    )) * mb_partHeigh;
+                    }
+                
+                // else
+                // {
+                //     xS = (mbPartIdx % (16 / mb_partWidth)) * mb_partWidth;                                
+                //     yS = (mbPartIdx / (16 / mb_partWidth)) * mb_partHeigh;
+                // }
+                
                 for(uint8_t yL = 0; yL < height; yL++)
                 {
                     for(uint8_t xL = 0; xL < width; xL++)
@@ -958,7 +980,8 @@ void macroblock::Decode_Inter()
                         
                     }
                 }
-                // std::cout << pred[0] << std::endl;
+                // if(this->idx_slice == 2)
+                //     std::cout << pred[0] << std::endl;
             }
         }
     }
@@ -974,12 +997,12 @@ void macroblock::Decode_Inter()
 
 void macroblock::ConstructPicture_16x16()
 {
-    if(idx_slice == 1 && is_interpred() && pos.x == 17)
-    {
-        std::cout << pred[0] << std::endl;
-        std::cout << resi[0] << std::endl;
+    // if(idx_slice == 1 && is_interpred() && pos.x == 17)
+    // {
+    //     std::cout << pred[0] << std::endl;
+    //     std::cout << resi[0] << std::endl;
         
-    }
+    // }
     for (int r = 0; r < 16; r++)
     {
         for (int c = 0; c < 16; c++)

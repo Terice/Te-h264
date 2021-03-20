@@ -17,70 +17,118 @@
 // 平均值
 #define two_tap_filter(a,b) ((a + b + 1) >> 1)
 
-int Prediction_Inter_Direct(\
+// 计算当前方向是不是不动的方向
+bool Direct_Col_Zero(\
     macroblock* current,\
-    int mbPartIdx, int subMbPartIdx,\
-    parser* pa, decoder *de, picture* pic\
+    int mbPartIdx, int subPartIdx,\
+    parser* pa, decoder *de
 )
 {
-    int mvCol[2] = {0,0};
-    int refIdxCol = 0;
-    //推导并置pic，和并置宏块
-    picture* colPic = NULL;
-    macroblock* mbAddrCol = NULL;
+    bool colZeroFlag; MotionVector mvCol; int refIdxCol;
 
-    MotionVector **mv_l0 = current->inter->mv.mv_l0;
-    MotionVector **mv_l1 = current->inter->mv.mv_l1;
-    int8* ref_idx_l0 = current->inter->ref_idx_l0;
-    int8* ref_idx_l1 = current->inter->ref_idx_l1;
-    bool* predFlagL0 = current->inter->predFlagL0;
-    bool* predFlagL1 = current->inter->predFlagL1;
-
-    //临时采用的推导方式
-    
-    colPic = de->list_Ref1[0];//选择参考表1的第一帧作为并置pic
-    //选择和当前宏块同一位置的宏块作为并置宏块
-    mbAddrCol = colPic->mb->get(current->pos.x, current->pos.y);
-
-    int luma4x4BlkIdx = 0;//用来推导子块索引
-    if(pa->pS->sps->direct_8x8_inference_flag) luma4x4BlkIdx = 5*mbPartIdx;
-    else luma4x4BlkIdx = 4*mbPartIdx + subMbPartIdx;
-
-    if(mbAddrCol->is_intrapred()) {mvCol[0] = 0; mvCol[1] = 0; refIdxCol = -1;}
-    else 
+    // 判断当前宏块是不是不动的宏块
+    if(!de->list_Ref1[0]->is_UsedForShort()) colZeroFlag = 0;
+    else
     {
+        // 计算相邻的并置块的运动矢量和参考索引
+        col_located_4x4_sub_Partions(\
+        current, mbPartIdx, subPartIdx, \
+        pa->pS->sps->direct_8x8_inference_flag,\
+        de->list_Ref1[0], mvCol, &refIdxCol);
+        
+        if(refIdxCol == 0)
+            if(mvCol[0] > -1 && mvCol[0] < 1 && mvCol[1] > -1 && mvCol[1] < 1)
+                colZeroFlag = 1;
+            else 
+                colZeroFlag = 0;
+        else
+            colZeroFlag = 0;
+    }
+    return colZeroFlag;
+}
+
+
+// 空间上 Direct 预测
+// 表示宏块的信息可由相邻空间上的宏块的信息推导出来
+void Prediction_Inter_Direct_Spatial(\
+    macroblock* current,\
+    int mbPartIdx, int subPartIdx,\
+    parser* pa, decoder *de
+)
+{
+    MotionVector **mv_l0 = current->inter->mv.mv_l0  ;
+    MotionVector **mv_l1 = current->inter->mv.mv_l1  ;
+    int8* ref_idx_l0     = current->inter->ref_idx_l0;
+    int8* ref_idx_l1     = current->inter->ref_idx_l1;
+    bool* predFlagL0     = current->inter->predFlagL0;
+    bool* predFlagL1     = current->inter->predFlagL1;
+
+    // 寻找周围的参考索引并且计算运动矢量
+    int refIdxL0N[3]; int refIdxL0;
+    int refIdxL1N[3]; int refIdxL1;
+    int directZeroPredictionFlag;
+
+    neighbour_motionvector_data(current, mbPartIdx, subPartIdx, 0, mv_l0, refIdxL0N);
+    neighbour_motionvector_data(current, mbPartIdx, subPartIdx, 1, mv_l1, refIdxL1N);
+
+    refIdxL0 = MinPositive(refIdxL0N[0], MinPositive(refIdxL0N[1], refIdxL0N[2]));
+    refIdxL1 = MinPositive(refIdxL1N[0], MinPositive(refIdxL1N[1], refIdxL1N[2]));
+    directZeroPredictionFlag = 0;
+
+    if(refIdxL0 < 0 && refIdxL1 < 0)
+    {
+        directZeroPredictionFlag = 1;
+        refIdxL1 = 0;
+        refIdxL0 = 0;
+    }
+    
+    // 判断当前宏块是不是不动的宏块
+    bool colZeroFlag;
+    colZeroFlag = Direct_Col_Zero(current, mbPartIdx, subPartIdx, pa,de);
+
+    // 如果是，则将运动矢量置零
+    if(directZeroPredictionFlag || refIdxL0 < 0 || (!refIdxL0 && colZeroFlag)) 
+    {
+        mv_l0[mbPartIdx][subPartIdx][0] = 0;
+        mv_l0[mbPartIdx][subPartIdx][1] = 0;
+    }
+    if(directZeroPredictionFlag || refIdxL1 < 0 || (!refIdxL1 && colZeroFlag)) 
+    {
+        mv_l1[mbPartIdx][subPartIdx][0] = 0;
+        mv_l1[mbPartIdx][subPartIdx][1] = 0;
     }
 
-    //时空预测
-    // if(up_slice->ps->direct_spatial_mv_pred_flag)//空间预测
+    // 确定参考索引
+    ref_idx_l0[mbPartIdx] = refIdxL0;
+    ref_idx_l1[mbPartIdx] = refIdxL1;
+
+    //是必须会有一个参考方向的，要么双向或者单向参考，不会没有参考方向
+    predFlagL0[mbPartIdx] = ref_idx_l0[mbPartIdx] >= 0 ? 1 : 0;
+    predFlagL1[mbPartIdx] = ref_idx_l1[mbPartIdx] >= 0 ? 1 : 0;
+
+}
+
+// Direct 预测，用来计算运动适量和参考索引
+int Prediction_Inter_Direct(\
+    macroblock* current,\
+    int mbPartIdx,\
+    parser* pa, decoder *de
+)
+{
+    //空间预测 spatial direct luma motion vector
+    // if(pa->cur_slice->ps->direct_spatial_mv_pred_flag)//空间预测
     // {
-        //这里有两种情况
-        //1、宏块随着周围的宏块一起运动
-        neighbour_motionvector(current, mbPartIdx, subMbPartIdx, 0, mv_l0);
-        neighbour_motionvector(current, mbPartIdx, subMbPartIdx, 1, mv_l1);
-        //2、宏块静止不动
-
-        //参考索引简单都设置为0
-        ref_idx_l0[mbPartIdx] = 0;
-        ref_idx_l1[mbPartIdx] = 0;
-
-        //是必须会有一个参考方向的，要么双向或者单向参考，不会没有参考方向
-        if(ref_idx_l0[mbPartIdx] >= 0 && ref_idx_l1[mbPartIdx] >= 0)    
+        MotionVector **mv0 = current->inter->mv.mv_l0;
+        MotionVector **mv1 = current->inter->mv.mv_l1;
+        for (int subMbPartIdx = 0; subMbPartIdx < 4; subMbPartIdx++)
         {
-            predFlagL0[mbPartIdx] = 1; predFlagL1[mbPartIdx] = 1;
-        }
-        else if(ref_idx_l0[mbPartIdx] >= 0 && ref_idx_l1[mbPartIdx] < 0)
-        {
-            predFlagL0[mbPartIdx] = 1; predFlagL1[mbPartIdx] = 0;
-        }
-        else //if(ref_idx_l0[mbPartIdx] < 0 && ref_idx_l1[mbPartIdx] >= 0)
-        {
-            predFlagL0[mbPartIdx] = 0; predFlagL1[mbPartIdx] = 1;
+            Prediction_Inter_Direct_Spatial(current, mbPartIdx, subMbPartIdx, pa, de);
+            // printf("direct mv: part: %d, sub: %d, mov0: [%2d,%2d], mov1: [%2d,%2d]\n", mbPartIdx, subMbPartIdx, mv0[mbPartIdx][subMbPartIdx][0],mv0[mbPartIdx][subMbPartIdx][1],mv1[mbPartIdx][subMbPartIdx][0],mv1[mbPartIdx][subMbPartIdx][1]);
         }
     // }
-    // else//时间预测(还没有写，所以全部是采用空间预测随周围运动)
+    // else//时间预测 
     // {
-    //    
+       
     // }
 
 
@@ -90,9 +138,6 @@ int Prediction_Inter_Direct(\
     // 这里指明了subMbPartIdx 所以是针对与子块来说的
     // 也就是说，如果需要重复解码的话，需要在这个函数的外面进行，而不是在这里
     //到这里运动矢量、参考索引、预测标志位 就已经解码完毕
-
-    
-
     return 1;
 }
 // int Prediction_Inter_LumaSampleInterpolation(int xIntL, int yIntL, int xFracL, int yFracL, picture* ref_pic)
@@ -101,9 +146,13 @@ void Weight_defaultWeight(matrix& m0, matrix& m1, matrix& out, bool flag_0, bool
 {
     matrix zero(out.w, out.h, 0);
     if(flag_0 && flag_1)
-    {out = (out + (m0 + m1));}
+    {
+        out = ((m0 + m1 + 1) >> 1);
+    }
     else
-    {out = (out + ((flag_0?m0:zero) + (flag_1?m1:zero)));}
+    {
+        out = (((flag_0?m0:zero) + (flag_1?m1:zero)));
+    }
 }
 // is_explicit 指明是否是显式加权
 // 显式加权会用到slice中的加权参数
@@ -413,10 +462,20 @@ void Prediction_Inter(\
 
     int mb_partWidth =  MbPartWidth(type);
     int mb_partHeigh = MbPartHeight(type);
-    if(type != B_Direct_16x16 && type != B_Skip)
+    
+    if(part == 4 && type != B_Direct_16x16 && type != B_Skip)
     {
-        xAL += (mbPartIdx % (16 / mb_partWidth)) * mb_partWidth + (part == 4 ? ((subMbPartIdx * SubMbPartWidth(current->inter->sub->type)) % 8) : 0);
-        yAL += (mbPartIdx / (16 / mb_partWidth)) * mb_partHeigh + (part == 4 ? ((subMbPartIdx * SubMbPartWidth(current->inter->sub->type)) / 8) : 0);
+        xAL += (mbPartIdx % (16 / mb_partWidth)) * mb_partWidth + \
+                subMbPartIdx * SubMbPartWidth(current->inter->sub->type) ;
+        yAL += (mbPartIdx / (16 / mb_partWidth)) * mb_partHeigh + \
+                subMbPartIdx * SubMbPartWidth(current->inter->sub->type) ;
+    }
+    else if(type == B_Direct_16x16 || type == B_Skip)
+    {
+        xAL += (mbPartIdx   % (16 / 8)) * 8;
+               (subMbPartIdx% (8  / 4)) * 4;
+        yAL += (mbPartIdx   / (16 / 8)) * 8 + \
+               (subMbPartIdx/ (8  / 4)) * 4;
     }
     else
     {

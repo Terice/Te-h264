@@ -99,7 +99,7 @@ matrix::matrix(int w, int h, int v)
     increase(data);
 
     if(v == -1 || v == 0)
-        memset(data->pointer, v, data->length);
+        memset(data->pointer, v, data->length * sizeof(int));
     else
         for (int i = 0; i < data->length; i++)
         {
