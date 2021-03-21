@@ -65,17 +65,23 @@ void picture::deocde()
     de->set_CurrentSlice(sl);
     sl->decode();
 
+    if(sl->type == B)
+    {
+        if(sl->ps->direct_spatial_mv_pred_flag)
+        {
+            std::cout << "spatial" << std::endl;
+        }
+        else
+        {
+            std::cout << "temporal" << std::endl;
+        }
+    }
+
     if(terr.picture_mbcomplete())
     print();
 
     std::cout << count_pic++ << std::endl;
     drawpic();
-
-    if(count_mb < mb->w * mb->h)
-    {
-        printf(">>pic  :(%4d) [%4d]/[%4d]",this->POC, mb->w * mb->h, count_mb);
-        terr.texit(-1);
-    }
 }
 
 void detect(macroblock *current, MacroBlockNeighInfo *info, int x, int y, int dx, int dy, picture* pic)
@@ -115,7 +121,7 @@ void picture::takein(macroblock *m)
     MacroBlockNeigh *neigh = &m->neighbour;
     detect(m, &m->neighbour.A, curpos_x, curpos_y, -1, 0, this);
     detect(m, &m->neighbour.B, curpos_x, curpos_y,  0,-1, this);
-    detect(m, &m->neighbour.C, curpos_x, curpos_y, +1, 0, this);
+    detect(m, &m->neighbour.C, curpos_x, curpos_y, +1,-1, this);
     detect(m, &m->neighbour.D, curpos_x, curpos_y, -1,-1, this);
     
 }
@@ -220,6 +226,8 @@ const char out_char[] =
     'M', 'W', '#', '@', '&', 
 };
 
+#include <string>
+#include <sstream>
 void picture::drawpic()
 {
     //可以指定的字符画宽高比例
@@ -230,9 +238,19 @@ void picture::drawpic()
     int out_w = mb->w * 16 / wid_scal;
     array2d<char> out_CharMatrix(out_w + 1, out_h + 1, 0);// = new array2d<char>(height_mb * 16 / hei_scal + 1, width_mb * 16 / wid_scal + 1, 0);
     
-    FILE *fp = fopen("frame", "w");
+    std::stringstream ss;
+    ss << "frame" << count_pic;
+
+    std::string name;
+    getline(ss, name);
+    // std::cout << "write file: " << name << std::endl;
+
+    FILE *fp = fopen(name.c_str(), "w");
     fwrite(cons->data, cons->w * cons->h, sizeof(char), fp);
     fclose(fp);
+
+    if(count_pic == 10)
+        exit(0);
 
     // char tmp = 0;
     // for (size_t y = 0; y < out_h; y += hei_scal)

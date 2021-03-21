@@ -5,6 +5,8 @@
 #include "gmbinfo.h"
 #include "neighbour.h"
 
+
+
 // 换成目标宏块内的坐标
 // 目标宏块 在 420 nombaddf 一定是一样的
 void target_position(int width, int height, int xN, int yN, int *xW, int *yW)
@@ -140,14 +142,17 @@ void neighbour_indice_luma8x8(int xP, int yP, int *luma8x8BlkIdx)
 {
     *luma8x8BlkIdx = 2*(yP/8)+(xP/8);
 }
-
-
-
-
 void neighbour_macroblock(macroblock *current, char direction, macroblock **result)
 {
     *result = trans_macroblock(current, direction);
 }
+
+
+
+
+
+
+// 计算并置的4x4子块
 void col_located_4x4_sub_Partions(\
     macroblock *current, int mbPartIdx, int subPartIdx,\
     bool direct_8x8_inference_flag, picture *colPic,\
@@ -169,21 +174,71 @@ void col_located_4x4_sub_Partions(\
     {
         // 先简单设置为 0 0 0 
         mvCol[0] = colMb->inter->mv.mv_l0[0][0][0];
+        mvCol[1] = colMb->inter->mv.mv_l0[0][0][1];
         *refIdxCol = 0;
     }
 }
+
+
+
+void neighbour_motionver_normal(macroblock *current, int mbPartIdx, int subPartIdx, MotionVector mv_lx, int direction)
+{
+    
+}
+void neighbour_motionver_bdire(){}
+void neighbour_motionver_pskip(){}
+
+// 中值处理运动矢量
+void MedianLumaMvPrediction()
+{}
+// 周围运动矢量数据
+void NeighbourPartMotionData(
+    macroblock *current, int mbPartIdx, int subPartIdx,\
+    int listSuffixFlag, NeiMvData *A, NeiMvData *B, NeiMvData *C 
+)
+{
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // 计算周围的运动矢量，此时不需要参考索引
 void neighbour_motionvector(
     macroblock *current, int mbPartIdx, int subPartIdx,\
-    int listSuffixFlag, MotionVector **mv_lX
+    int listSuffixFlag, MotionVector mv_lX
 )
 {
     int tmp[3];
     neighbour_motionvector_data(current, mbPartIdx, subPartIdx, listSuffixFlag, mv_lX, tmp);
 }
+// 求解相邻运动矢量所在的位置以及参考索引
 void neighbour_motionvector_data(
     macroblock *current, int mbPartIdx, int subPartIdx,\
-    int listSuffixFlag, MotionVector **mv_lX,\
+    int listSuffixFlag, MotionVector mv_lX,\
     int *refIdxLXN
 )
 {
@@ -197,17 +252,15 @@ void neighbour_motionvector_data(
     int mbPartIdx_C = -1;int subPartIdx_C = -1;int refIdxLX_C = -1;MotionVector mv_lx_C;
     int mbPartIdx_D = -1;int subPartIdx_D = -1;int refIdxLX_D = -1;MotionVector mv_lx_D;
 
-    // if(current->pos.x == 23 && current->pos.y == 0 && current->idx_slice == 1)
-    //     int a = 0;
-    
     predmode_mb_part Pred_LX = listSuffixFlag ? Pred_L1 : Pred_L0;
     int8* ref_idx_lx = listSuffixFlag == 1 ? current->inter->ref_idx_l1 : current->inter->ref_idx_l0;
-    int refIdxLX = ref_idx_lx[mbPartIdx];
+    int refIdxLX = MbPartPredMode(current->type, mbPartIdx);;
 
+    // 这个函数是用来
     auto f_1 = [&current, listSuffixFlag, mbPartIdx, subPartIdx, Pred_LX](char direction, int& mbPartIdx_N, int& subPartIdx_N, int& refIdxLX_N, int mv_lx_N[2])
     ->macroblock*
     {
-        macroblock* N ;//=  get_PartNeighbour(current, direction, 0x010, mbPartIdx, subPartIdx, mbPartIdx_N, subPartIdx_N);
+        macroblock* N ;
         neighbour_part_16x16(current, mbPartIdx, subPartIdx, direction, &N, &mbPartIdx_N, &subPartIdx_N);
         int refIdx = -1;
         // 如果 N 不可用 || 是帧内 || 这个方向不预测
@@ -218,17 +271,13 @@ void neighbour_motionvector_data(
             refIdx = -1;
             mv_lx_N[0] = 0;
             mv_lx_N[1] = 0;
-            refIdxLX_N = refIdx;
-            return N;
         }
-
-        predmode_mb_part premode_cur = MbPartPredMode(current->type, mbPartIdx);
         // predmode_mb_part premode_cur_sub = current->num_mb_part == 4 ? \
         //                                     SubMbPartPredMode(current->inter->sub[mbPartIdx].type) : Pred_NU;
-        MotionVector **mv_lx = NULL;
-        int8* ref_idx_lx = NULL;
-        if(N)
+        else
         {
+            MotionVector **mv_lx = NULL;
+            int8* ref_idx_lx = NULL;
             ref_idx_lx = listSuffixFlag ? N->inter->ref_idx_l1    : N->inter->ref_idx_l0;
             mv_lx      = listSuffixFlag ? N->inter->mv.mv_l1      : N->inter->mv.mv_l0;
 
@@ -249,8 +298,8 @@ void neighbour_motionvector_data(
         )
     )
     {// Skip宏块这种情况直接置零返回
-        mv_lX[0][0][0] = 0;
-        mv_lX[0][0][1] = 0;
+        mv_lX[0] = 0;
+        mv_lX[1] = 0;
         return ;
     }
     C = f_1('C', mbPartIdx_C, subPartIdx_C, refIdxLX_C, mv_lx_C);
@@ -265,25 +314,26 @@ void neighbour_motionvector_data(
         subPartIdx_C = subPartIdx_D;
         mv_lx_C[0] = mv_lx_D[0];
         mv_lx_C[1] = mv_lx_D[1];
+        refIdxLX_C = refIdxLX_D;
     }
     // 这里只是计算 prediction 的值，所以传入的是mvp
     // 计算周围的运动矢量
     if(partWidth == 16 && partHeight == 8 && mbPartIdx == 0 && refIdxLX_B == refIdxLX) 
     {
-        mv_lX[mbPartIdx][subPartIdx][0] = mv_lx_B[0];
-        mv_lX[mbPartIdx][subPartIdx][1] = mv_lx_B[1];
+        mv_lX[0] = mv_lx_B[0];
+        mv_lX[1] = mv_lx_B[1];
     }
     else if((partWidth == 16 && partHeight == 8 && mbPartIdx == 1 && refIdxLX_A == refIdxLX) || \
             (partWidth == 8 && partHeight == 16 && mbPartIdx == 0 && refIdxLX_A == refIdxLX)
     )
     {
-        mv_lX[mbPartIdx][subPartIdx][0] = mv_lx_A[0];
-        mv_lX[mbPartIdx][subPartIdx][1] = mv_lx_A[1];
+        mv_lX[0] = mv_lx_A[0];
+        mv_lX[1] = mv_lx_A[1];
     }
     else if(partWidth == 8 && partHeight == 16 && mbPartIdx == 1 && refIdxLX_C == refIdxLX)
     {
-        mv_lX[mbPartIdx][subPartIdx][0] = mv_lx_C[0];
-        mv_lX[mbPartIdx][subPartIdx][1] = mv_lx_C[1];
+        mv_lX[0] = mv_lx_C[0];
+        mv_lX[1] = mv_lx_C[1];
     }
     else //中值处理
     {
@@ -295,31 +345,36 @@ void neighbour_motionvector_data(
         }
         if     (refIdxLX_A == refIdxLX && refIdxLX_B != refIdxLX && refIdxLX_C != refIdxLX)
         {
-            mv_lX[mbPartIdx][subPartIdx][0] = mv_lx_A[0];
-            mv_lX[mbPartIdx][subPartIdx][1] = mv_lx_A[1];
+            mv_lX[0] = mv_lx_A[0];
+            mv_lX[1] = mv_lx_A[1];
         }
         else if(refIdxLX_A != refIdxLX && refIdxLX_B == refIdxLX && refIdxLX_C != refIdxLX)
         {
-            mv_lX[mbPartIdx][subPartIdx][0] = mv_lx_B[0];
-            mv_lX[mbPartIdx][subPartIdx][1] = mv_lx_B[1];
+            mv_lX[0] = mv_lx_B[0];
+            mv_lX[1] = mv_lx_B[1];
         }
         else if(refIdxLX_A != refIdxLX && refIdxLX_B != refIdxLX && refIdxLX_C == refIdxLX)
         {
-            mv_lX[mbPartIdx][subPartIdx][0] = mv_lx_C[0];
-            mv_lX[mbPartIdx][subPartIdx][1] = mv_lx_C[1];
+            mv_lX[0] = mv_lx_C[0];
+            mv_lX[1] = mv_lx_C[1];
         }
         else 
         {
-            mv_lX[mbPartIdx][subPartIdx][0] = Median(mv_lx_A[0], mv_lx_B[0], mv_lx_C[0]);
-            mv_lX[mbPartIdx][subPartIdx][1] = Median(mv_lx_A[1], mv_lx_B[1], mv_lx_C[1]);
+            mv_lX[0] = Median(mv_lx_A[0], mv_lx_B[0], mv_lx_C[0]);
+            mv_lX[1] = Median(mv_lx_A[1], mv_lx_B[1], mv_lx_C[1]);
         }
     }
+    // 这三个是留给 Direct 预测模式来预测参考索引的
     refIdxLXN[0] = refIdxLX_A;
     refIdxLXN[1] = refIdxLX_B;
     refIdxLXN[2] = refIdxLX_C;
     
     return ;
 }
+
+
+
+
 
 // 计算 16x16 宏块中的相邻 part
 void neighbour_part_16x16(\

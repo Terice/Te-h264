@@ -3,11 +3,38 @@
 
 class macroblock;
 
+
+
+typedef struct Neigh16x16__
+{
+    bool avaiable;
+    
+    macroblock *mb;
+    int mbPartIdx;
+    int subPartIdx;
+}Neigh16x16;
+
+typedef struct NeiMvData__
+{
+    Neigh16x16 info;
+    int refidx;
+    MotionVector mv;
+}NeiMvData;
+
+
 void neighbour_macroblock(
     macroblock *current, char direction, 
     macroblock **result
 );
+void neighbour_motionvector_data(
+    macroblock *current, int mbPartIdx, int subPartIdx,\
+    int listSuffixFlag, MotionVector mv_lX,\
+    int *refIdxLXN
+);
 
+void neighbour_motionver_normal();
+void neighbour_motionver_bskip ();
+void neighbour_motionver_pskip ();
 
 void col_located_4x4_sub_Partions(\
     macroblock *current, int mbPartIdx, int subPartIdx,\
@@ -24,14 +51,9 @@ void col_located_4x4_sub_Partions(\
  */
 void neighbour_motionvector(
     macroblock *current, int mbPartIdx, int subPartIdx,\
-    int direction, MotionVector **mv_lx
+    int direction, MotionVector mv_lx
 );
 
-void neighbour_motionvector_data(
-    macroblock *current, int mbPartIdx, int subPartIdx,\
-    int direction, MotionVector **mv_lx,\
-    int *refIdxLXN
-);
 
 // 计算 16x16 宏块中的相邻 part
 void neighbour_part_16x16(\

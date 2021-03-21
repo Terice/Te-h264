@@ -52,7 +52,7 @@ bool Direct_Col_Zero(\
 // 表示宏块的信息可由相邻空间上的宏块的信息推导出来
 void Prediction_Inter_Direct_Spatial(\
     macroblock* current,\
-    int mbPartIdx, int subPartIdx,\
+    int mbPartIdx,\
     parser* pa, decoder *de
 )
 {
@@ -68,8 +68,11 @@ void Prediction_Inter_Direct_Spatial(\
     int refIdxL1N[3]; int refIdxL1;
     int directZeroPredictionFlag;
 
-    neighbour_motionvector_data(current, mbPartIdx, subPartIdx, 0, mv_l0, refIdxL0N);
-    neighbour_motionvector_data(current, mbPartIdx, subPartIdx, 1, mv_l1, refIdxL1N);
+    MotionVector mva_l0;
+    MotionVector mva_l1;
+
+    neighbour_motionvector_data(current, 0, 0, 0, mva_l0, refIdxL0N);
+    neighbour_motionvector_data(current, 0, 0, 1, mva_l1, refIdxL1N);
 
     refIdxL0 = MinPositive(refIdxL0N[0], MinPositive(refIdxL0N[1], refIdxL0N[2]));
     refIdxL1 = MinPositive(refIdxL1N[0], MinPositive(refIdxL1N[1], refIdxL1N[2]));
@@ -81,23 +84,28 @@ void Prediction_Inter_Direct_Spatial(\
         refIdxL1 = 0;
         refIdxL0 = 0;
     }
-    
-    // 判断当前宏块是不是不动的宏块
-    bool colZeroFlag;
-    colZeroFlag = Direct_Col_Zero(current, mbPartIdx, subPartIdx, pa,de);
-
-    // 如果是，则将运动矢量置零
-    if(directZeroPredictionFlag || refIdxL0 < 0 || (!refIdxL0 && colZeroFlag)) 
+    for (int subPartIdx = 0; subPartIdx < 4; subPartIdx++)
     {
-        mv_l0[mbPartIdx][subPartIdx][0] = 0;
-        mv_l0[mbPartIdx][subPartIdx][1] = 0;
-    }
-    if(directZeroPredictionFlag || refIdxL1 < 0 || (!refIdxL1 && colZeroFlag)) 
-    {
-        mv_l1[mbPartIdx][subPartIdx][0] = 0;
-        mv_l1[mbPartIdx][subPartIdx][1] = 0;
-    }
+        // 判断当前宏块是不是不动的宏块
+        bool colZeroFlag;
+        colZeroFlag = Direct_Col_Zero(current, mbPartIdx, subPartIdx, pa,de);
 
+        mv_l0[mbPartIdx][subPartIdx][0] = mva_l0[0];
+        mv_l0[mbPartIdx][subPartIdx][1] = mva_l0[1];
+        mv_l1[mbPartIdx][subPartIdx][0] = mva_l1[0];
+        mv_l1[mbPartIdx][subPartIdx][1] = mva_l1[1];
+        // 如果是，则将运动矢量置零
+        if(directZeroPredictionFlag || refIdxL0 < 0 || (!refIdxL0 && colZeroFlag)) 
+        {
+            mv_l0[mbPartIdx][subPartIdx][0] = 0;
+            mv_l0[mbPartIdx][subPartIdx][1] = 0;
+        }
+        if(directZeroPredictionFlag || refIdxL1 < 0 || (!refIdxL1 && colZeroFlag)) 
+        {
+            mv_l1[mbPartIdx][subPartIdx][0] = 0;
+            mv_l1[mbPartIdx][subPartIdx][1] = 0;
+        }
+    }
     // 确定参考索引
     ref_idx_l0[mbPartIdx] = refIdxL0;
     ref_idx_l1[mbPartIdx] = refIdxL1;
@@ -115,20 +123,21 @@ int Prediction_Inter_Direct(\
     parser* pa, decoder *de
 )
 {
+    if(current->idx_slice == 2 && current->pos.x == 4 && current->pos.y == 15)
+        int a = 0;
     //空间预测 spatial direct luma motion vector
     // if(pa->cur_slice->ps->direct_spatial_mv_pred_flag)//空间预测
     // {
-        MotionVector **mv0 = current->inter->mv.mv_l0;
-        MotionVector **mv1 = current->inter->mv.mv_l1;
-        for (int subMbPartIdx = 0; subMbPartIdx < 4; subMbPartIdx++)
-        {
-            Prediction_Inter_Direct_Spatial(current, mbPartIdx, subMbPartIdx, pa, de);
-            // printf("direct mv: part: %d, sub: %d, mov0: [%2d,%2d], mov1: [%2d,%2d]\n", mbPartIdx, subMbPartIdx, mv0[mbPartIdx][subMbPartIdx][0],mv0[mbPartIdx][subMbPartIdx][1],mv1[mbPartIdx][subMbPartIdx][0],mv1[mbPartIdx][subMbPartIdx][1]);
-        }
+        // MotionVector **mv0 = current->inter->mv.mv_l0;
+        // MotionVector **mv1 = current->inter->mv.mv_l1;
+        // for (int subMbPartIdx = 0; subMbPartIdx < 4; subMbPartIdx++)
+        // {
+            Prediction_Inter_Direct_Spatial(current, mbPartIdx, pa, de);
+            // printf("direct [%2d, %2d]: part: %d, sub: %d, mov0: [%2d,%2d], mov1: [%2d,%2d]\n",current->pos.x, current->pos.y, mbPartIdx, subMbPartIdx, mv0[mbPartIdx][subMbPartIdx][0],mv0[mbPartIdx][subMbPartIdx][1],mv1[mbPartIdx][subMbPartIdx][0],mv1[mbPartIdx][subMbPartIdx][1]);
+        // }
     // }
     // else//时间预测 
     // {
-       
     // }
 
 
@@ -465,14 +474,17 @@ void Prediction_Inter(\
     
     if(part == 4 && type != B_Direct_16x16 && type != B_Skip)
     {
-        xAL += (mbPartIdx % (16 / mb_partWidth)) * mb_partWidth + \
-                subMbPartIdx * SubMbPartWidth(current->inter->sub->type) ;
-        yAL += (mbPartIdx / (16 / mb_partWidth)) * mb_partHeigh + \
-                subMbPartIdx * SubMbPartWidth(current->inter->sub->type) ;
+        int subW =  SubMbPartWidth(current->inter->sub[mbPartIdx].type);
+        int subH = SubMbPartHeight(current->inter->sub[mbPartIdx].type);
+        
+        xAL += (mbPartIdx % (16 / 8    )) * mb_partWidth + \
+             subMbPartIdx % ( 8 / subW )  * subW ;
+        yAL += (mbPartIdx / (16 / 8    )) * mb_partHeigh + \
+             subMbPartIdx / ( 8 / subW )  * subH ;
     }
     else if(type == B_Direct_16x16 || type == B_Skip)
     {
-        xAL += (mbPartIdx   % (16 / 8)) * 8;
+        xAL += (mbPartIdx   % (16 / 8)) * 8 + \
                (subMbPartIdx% (8  / 4)) * 4;
         yAL += (mbPartIdx   / (16 / 8)) * 8 + \
                (subMbPartIdx/ (8  / 4)) * 4;

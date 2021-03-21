@@ -1399,9 +1399,8 @@ uint8 cabac::read_ref_idx(int syntaxelements)
         int tmp = 0;
         int mbPartIdxN = 0;
         int subPartIdxN = 0;
+        macroblock* N ;
         uint8 fieldflag = 0;//if(MbaffFrameFlag && cur是帧宏块 && N 是场宏块)
-        macroblock* N ;//= p->neig(cur, direction, 0x010, mbPartIdx, 0, mbPartIdxN, tmp);
-        // neighbour_luma_4x4_indice(cur, mbPartIdx, direction, &N, &mbPartIdxN);
         neighbour_part_16x16(cur, mbPartIdx, 0, direction, &N, &mbPartIdxN, &subPartIdxN);
         uint8 predModeEqualFlagN = 0;
         uint8 refIdxZeroFlagN = 0;

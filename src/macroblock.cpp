@@ -103,6 +103,8 @@ void macroblock::attach(picture* p)
 // 并且此时应该已经链接到了pic上了，周围宏块都已经计算好了
 void macroblock::decode()
 {
+    if(this->idx_slice == 7 && this->pos.x == 33 && this->pos.y == 8)
+        int a = 1;
     ParseHead();
     // std::cout << ">> ma: type:[" << mb_type << "]" << pos.x << "," << pos.y << std::endl; 
     calcqp();//
@@ -217,6 +219,8 @@ void macroblock::Parse_Sub(int* noSubMbPartSizeLessThan8x8Flag)
         predFlagL0[mbPartIdx] = PredFlag(this, mbPartIdx, 0);
         if(sl->type == B)
             predFlagL1[mbPartIdx] = PredFlag(this, mbPartIdx, 1);
+        else
+            predFlagL1[mbPartIdx] = false;
     }
 
     // 读取参考帧索引
@@ -255,7 +259,7 @@ void macroblock::Parse_Sub(int* noSubMbPartSizeLessThan8x8Flag)
                     mvd_l0[mbPartIdx][subMbPartIdx][1] =  pa->read_ae(0x00043000U | ((uint32)mbPartIdx << 8) | (subMbPartIdx << 4)  | (1U << 1) | 0U);
                 // }
                 // pic->get_MvNeighbour(this, mbPartIdx, subMbPartIdx, 0, mvp_l0);
-                neighbour_motionvector(this, mbPartIdx, subMbPartIdx, 0, mvp_l0);
+                neighbour_motionvector(this, mbPartIdx, subMbPartIdx, 0, mvp_l0[mbPartIdx][subMbPartIdx]);
 
                 // 读取到mvp和mvd就可以计算出来mv了
                 mv_l0[mbPartIdx][subMbPartIdx][0] = mvp_l0[mbPartIdx][subMbPartIdx][0] + mvd_l0[mbPartIdx][subMbPartIdx][0];
@@ -288,7 +292,7 @@ void macroblock::Parse_Sub(int* noSubMbPartSizeLessThan8x8Flag)
                     mvd_l1[mbPartIdx][subMbPartIdx][0] =  pa->read_ae(0x00043000U | ((uint32)mbPartIdx << 8) | (subMbPartIdx << 4)  | (0U << 1) | 1U);
                     mvd_l1[mbPartIdx][subMbPartIdx][1] =  pa->read_ae(0x00043000U | ((uint32)mbPartIdx << 8) | (subMbPartIdx << 4)  | (1U << 1) | 1U);
                     // }
-                    neighbour_motionvector(this, mbPartIdx, subMbPartIdx, 0, mvp_l1);
+                    neighbour_motionvector(this, mbPartIdx, subMbPartIdx, 0, mvp_l1[mbPartIdx][subMbPartIdx]);
                     // 读取到mvp和mvd就可以计算出来mv了
                     mv_l1[mbPartIdx][subMbPartIdx][0] = mvp_l1[mbPartIdx][subMbPartIdx][0] + mvd_l1[mbPartIdx][subMbPartIdx][0];
                     mv_l1[mbPartIdx][subMbPartIdx][1] = mvp_l1[mbPartIdx][subMbPartIdx][1] + mvd_l1[mbPartIdx][subMbPartIdx][1];
@@ -377,7 +381,7 @@ void macroblock::Parse_Skip()
         num_mb_part = 1;
         MallocMotionVectorPkg(&inter->mv, 1, NULL);
         inter->ref_idx_l0[0] = 0;// 参考索引是0;因为是全块并且前向预测，所以这里只有一个值
-        neighbour_motionvector(this, 0, 0, 0, inter->mv.mv_l0);
+        neighbour_motionvector(this, 0, 0, 0, inter->mv.mv_l0[0][0]);
         // 0 号块 ，因为 P_Skip 只有一个块
         inter->predFlagL0[0] = true;
     
@@ -426,6 +430,7 @@ void macroblock::Parse_Inter()
 {
 
     inter = new Inter_pred;
+    memset(inter, 0, sizeof(Inter_pred));
     inter->sub = NULL;
 
     int8 *ref_idx_l0 = inter->ref_idx_l0;
@@ -469,7 +474,7 @@ void macroblock::Parse_Inter()
         {
             mvd_l0[mbPartIdx][0][0] = pa->read_ae(0x00043000U | ((uint32)mbPartIdx << 8) | (0U << 4)  | (0U << 1) | 0U); 
             mvd_l0[mbPartIdx][0][1] = pa->read_ae(0x00043000U | ((uint32)mbPartIdx << 8) | (0U << 4)  | (1U << 1) | 0U); 
-            neighbour_motionvector(this, mbPartIdx, 0, 0, mvp_l0);
+            neighbour_motionvector(this, mbPartIdx, 0, 0, mvp_l0[mbPartIdx][0]);
             mv_l0[mbPartIdx][0][0] = mvp_l0[mbPartIdx][0][0] +  mvd_l0[mbPartIdx][0][0];
             mv_l0[mbPartIdx][0][1] = mvp_l0[mbPartIdx][0][1] +  mvd_l0[mbPartIdx][0][1];
             if(terr.inter_movevector())
@@ -489,7 +494,7 @@ void macroblock::Parse_Inter()
         {
             mvd_l1[mbPartIdx][0][0] = pa->read_ae(0x00043000U | ((uint32)mbPartIdx << 8) | (0U << 4)  | (0U << 1) | 1);
             mvd_l1[mbPartIdx][0][1] = pa->read_ae(0x00043000U | ((uint32)mbPartIdx << 8) | (0U << 4)  | (1U << 1) | 1);
-            neighbour_motionvector(this, mbPartIdx, 0, 1, mvp_l1);
+            neighbour_motionvector(this, mbPartIdx, 0, 1, mvp_l1[mbPartIdx][0]);
             mv_l1[mbPartIdx][0][0] = mvp_l1[mbPartIdx][0][0] + mvd_l1[mbPartIdx][0][0];
             mv_l1[mbPartIdx][0][1] = mvp_l1[mbPartIdx][0][1] + mvd_l1[mbPartIdx][0][1];
             if(terr.inter_movevector())
@@ -748,10 +753,9 @@ void macroblock::Decode_Intra16x16()
 void macroblock::Decode_Inter()
 {
     int a = 0;
-    if(idx_slice == 2)
-    {
-        a = 1;
-    }
+    
+    if(this->idx_slice == 5 && this->pos.x == 33 && this->pos.y == 10)
+        a = 0;
     //如果不是16x16直接预测 并且 不是B_Skip宏块
     type_slice slice_type = sl->type;
     // if(type != B_Direct_16x16 && type != B_Skip) <- 这句话其实是用来说明运动矢量的来源的，解码里面其实可以直接运算
@@ -868,6 +872,12 @@ void macroblock::Decode_Inter()
                         ref_pic_1, mv_l1
                     );
                 }
+                if(a)
+                {
+                    std::cout << tmp_0 << std::endl;
+                    std::cout << tmp_1 << std::endl;
+                }
+
                 //加权预测
                 uint8_t weighted_pred_flag  = sl->ps->pps->weighted_pred_flag;
                 uint8_t weighted_bipred_idc = sl->ps->pps->weighted_bipred_idc;
@@ -931,6 +941,10 @@ void macroblock::Decode_Inter()
                     }
                 }
                 
+                if(a)
+                {
+                    std::cout << out << std::endl;
+                }
                 //赋值
                 int mb_partWidth = MbPartWidth(type);
                 int mb_partHeigh = MbPartHeight(type);
@@ -980,8 +994,8 @@ void macroblock::Decode_Inter()
                         
                     }
                 }
-                // if(this->idx_slice == 2)
-                //     std::cout << pred[0] << std::endl;
+                if(a)
+                    std::cout << pred[0] << std::endl;
             }
         }
     }

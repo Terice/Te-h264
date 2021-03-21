@@ -24,7 +24,7 @@ int main(int argc, char* argv[])
                     data[r * w + c] = c/16;
                 else if( c % 16 == 1)
                     data[r * w + c] = r/16;
-            }            
+            }
         }
         
     }
