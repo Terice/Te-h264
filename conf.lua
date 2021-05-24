@@ -36,7 +36,7 @@ DE_RESIDUAL_TRANSCOEFF           = 0
 DE_MB                            = 0
 
 --
-DE_PICTURE_MBCOMPLETE            = 0
+DE_PICTURE_MBCOMPLETE            = 1
 --残差
 --打印 Y Cb Cr 的残差
 

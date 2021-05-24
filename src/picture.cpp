@@ -69,7 +69,7 @@ void picture::deocde()
     {
         if(sl->ps->direct_spatial_mv_pred_flag)
         {
-            std::cout << "spatial" << std::endl;
+            // std::cout << "spatial" << std::endl;
         }
         else
         {
@@ -80,7 +80,7 @@ void picture::deocde()
     if(terr.picture_mbcomplete())
     print();
 
-    std::cout << count_pic++ << std::endl;
+
     drawpic();
 }
 
@@ -207,6 +207,10 @@ void picture::print()
         }
         printf(" |\n");
     }
+
+
+
+    
     printf("--IDX:[%4d] POC:[%4d]\n", count_pic++, POC);
     if(count_mb < mb->w * mb->h)
     {
@@ -236,21 +240,18 @@ void picture::drawpic()
     //
     int out_h = mb->h * 16 / hei_scal;
     int out_w = mb->w * 16 / wid_scal;
-    array2d<char> out_CharMatrix(out_w + 1, out_h + 1, 0);// = new array2d<char>(height_mb * 16 / hei_scal + 1, width_mb * 16 / wid_scal + 1, 0);
+    // array2d<char> out_CharMatrix(out_w + 1, out_h + 1, 0);// = new array2d<char>(height_mb * 16 / hei_scal + 1, width_mb * 16 / wid_scal + 1, 0);
     
-    std::stringstream ss;
-    ss << "frame" << count_pic;
+    // std::stringstream ss;
+    // ss << "frame" << count_pic;
 
-    std::string name;
-    getline(ss, name);
-    // std::cout << "write file: " << name << std::endl;
+    // std::string name;
+    // getline(ss, name);
+    // // std::cout << "write file: " << name << std::endl;
 
-    FILE *fp = fopen(name.c_str(), "w");
-    fwrite(cons->data, cons->w * cons->h, sizeof(char), fp);
-    fclose(fp);
-
-    if(count_pic == 10)
-        exit(0);
+    // FILE *fp = fopen(name.c_str(), "w");
+    // fwrite(cons->data, cons->w * cons->h, sizeof(char), fp);
+    // fclose(fp);
 
     // char tmp = 0;
     // for (size_t y = 0; y < out_h; y += hei_scal)

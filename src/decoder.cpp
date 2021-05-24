@@ -488,8 +488,15 @@ void decoder::out_DecodedBuf()
 
 }
 
-#include <opencv2/opencv.hpp>
-using namespace cv;
+
+#include <SDL/SDL.h>
+static SDL_Surface* screen;
+static SDL_Event event;
+static unsigned int \
+	rmask = 0x000000FF,\
+    gmask = 0x000000FF,\
+    bmask = 0x000000FF,\
+    amask = 0x000000FF;	// RGBA8888模式
 void decoder::out_DecodedPic()
 {
     //由栈来管理和输出缓冲的pic
@@ -510,14 +517,36 @@ void decoder::out_DecodedPic()
         {
             // list_Out.top()->drawpic();      //pic字符化
             picture* pic = list_Out.top();
-            printf(">>decder: current out pic : POC:%4d\n", list_Out.top()->POC);
+            // printf(">>decder: current out pic : POC:%4d\n", list_Out.top()->POC);
 
-            Mat frame(pic->cons->h, pic->cons->w, CV_8UC1, pic->cons->data);
-            imshow("out", frame);
-            waitKey(1);
 
+            SDL_Surface *frame = SDL_CreateRGBSurfaceFrom((void*)(pic->cons->data), pic->cons->w, pic->cons->h, 1*8, 1*pic->cons->w, rmask, gmask, bmask, amask);
+            SDL_BlitSurface(frame, NULL, screen, NULL );
+            SDL_FreeSurface(frame);
+            SDL_Flip(screen);
+
+            int next = 1;
+            while(next)
+            {
+                
+                SDL_WaitEvent(&event);
+                switch (event.type)
+                {
+                case SDL_QUIT:
+                    {
+                        SDL_Quit();
+                        exit(0);
+                    }
+                    break;
+                case SDL_KEYDOWN:
+                    next = 0;
+                    break;
+                default:
+                    // printf("SDL: event : %2d\n", event.type);
+                    break;
+                }
+            }
         }
-        
         // 输出完毕
         list_Out.top()->state_out = true;//输出之后的 pic 输出状态全部变为 已经输出
         list_Out.pop();                  //已经输出的pic出栈
@@ -528,8 +557,9 @@ void decoder::out_DecodedPic()
 decoder::decoder()
 {
 
-    // namedWindow("out", cv::WINDOW_NORMAL);
-
+    SDL_Init( SDL_INIT_EVERYTHING );
+    screen = SDL_SetVideoMode( 864, 480, 32, SDL_SWSURFACE );
+    
     count_Out = 0;
     curPIC = NULL;
     curSLI = NULL;
