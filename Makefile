@@ -1,7 +1,7 @@
 
 CC=g++
 CFLAGS+=-g -std=c++11 
-LDFLAGS+= -llua5.1  `pkg-config --cflags --libs opencv4`
+LDFLAGS+= -llua5.1 -lSDL #`pkg-config --cflags --libs opencv4`
 
 BIN=./
 OBJ=./obj
@@ -9,6 +9,7 @@ SRC=./src
 INC=./inc
 
 target=a
+
 depend= $(OBJ)/terror.o\
 $(OBJ)/reader.o  \
 $(OBJ)/decoder.o $(OBJ)/parser.o\

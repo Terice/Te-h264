@@ -465,7 +465,7 @@ uint16 cabac::read_mb_type()
         ctxIdx = 0 + suffix_ctxIdxOffset;
         // 因为第一位如果存在，则在上面已经解码过了，所以这里是第二位开始
         if(decode_finaly()) // 快进到休止解码判断 I_PCM
-            { init_engine();return 30;}
+            { init_engine();return 30;} // 
         else
         {
             int predmode;
@@ -1583,8 +1583,6 @@ int cabac::read_mvd_lx(int syntaxelements)
     //         result_str += result_cur;
     //     } while((suffix_result = IsIn_UEGk_binarization(result_str, binIdx2, 0, 0, 3)) == -1);
     // }
-    
-
     // if(prefix_result != 0 && signedValFlag)
     //     sig = (DecodeValueUsingCtxIdx(0,1) == 1) ? -1 : 1;
         
