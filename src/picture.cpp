@@ -11,7 +11,7 @@
 #include "macroblock.h"
 #include "pixmap.h"
 
-static int count_pic = 0;
+static int count_pic = 1;
 
 picture::picture(parser* p, decoder* d)
 {
@@ -78,9 +78,14 @@ void picture::deocde()
     }
 
     if(terr.picture_mbcomplete())
-    print();
+        print();
 
+    if(sl->type == I) type = 'I';
+    else if(sl->type == P) type = 'P';
+    else type = 'B'; 
 
+    poc = POC;
+    dec = count_pic++;
     drawpic();
 }
 
@@ -184,14 +189,21 @@ void picture::refidc(int nal_ref_idc)
 void picture::print()
 {
     // 宏块是否齐全的输出
+    
     // NULL 会用 ～ 标识
     // 非空宏块指针会用其 type 的调试值标识
     printf(">>pic  :\n");
+    /*
+    行号       列号
+    28---------4 ---------8 ------
+    |  0 1 1 2 |  2 0 2 2 |  1 2 2  每个数据两格(%-2d)
+    |  0 0 0 2 |  5 1 5 2 |  7 0 2 
+    */
     for (size_t i = 0; i < this->mb->h; i++)
     {
         if(i%4 == 0) 
         {
-            printf("%-2lu ", i/4 * 4);
+            printf(" %-2lu", i/4 * 4);
             int width = this->mb->w/4+1;
             for (size_t j = 1; j < width; j++)
             {
@@ -202,16 +214,50 @@ void picture::print()
         for (size_t j = 0; j < this->mb->w; j++)
         {
             if(j%4 == 0) printf(" | ");
-            if((*this->mb)[i][j] != NULL) printf("%2d", mb[0][i][j]->mb_type);
-            else printf("~~");
+
+            if(this->mb[0][i][j] != NULL) 
+                printf("%2d", mb[0][i][j]->mb_type);
+            else 
+                printf("~~");
+        }
+        printf(" |\n");
+    }
+    // 函数稍加改变就可以用来输出每个运动矢量
+    /*
+    (%5d, %5d) - 14
+    行号       列号
+    28---------------------------------------------------------4 ---------8 ------
+    |  0 1 1 2 |  2 0 2 2 |  1 2 2  每个数据两格(%-2d)
+    |  0 0 0 2 |  5 1 5 2 |  7 0 2 
+    */
+    for (size_t i = 0; i < this->mb->h; i++)
+    {
+
+        if(i%4 == 0) 
+        {
+            printf(" %-2lu", i/4 * 4);
+            int width = this->mb->w/4+1;
+            for (size_t j = 1; j < width; j++)
+            {
+                printf("---------------------------------------------------------%-2d", j*4);
+            }
+            printf("\n");
+        }
+        for (size_t j = 0; j < this->mb->w; j++)
+        {
+            if(j%4 == 0) printf(" | ");
+
+            if(this->mb[0][i][j] != NULL && mb[0][i][j]->is_interpred()) 
+                printf("(%5d, %5d)", mb[0][i][j]->inter->mv.mv_l1[0][0][0],mb[0][i][j]->inter->mv.mv_l1[0][0][1]);
+            else 
+                printf("..............");
         }
         printf(" |\n");
     }
 
 
-
     
-    printf("--IDX:[%4d] POC:[%4d]\n", count_pic++, POC);
+    // printf("--IDX:[%4d] POC:[%4d]\n", count_pic++, POC);
     if(count_mb < mb->w * mb->h)
     {
         printf(">>pic  : [%4d]/[%4d]", mb->w * mb->h, count_mb);

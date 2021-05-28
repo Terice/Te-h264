@@ -247,16 +247,16 @@ void neighbour_motionvector_data(
     macroblock* C = NULL;
     macroblock* D = NULL;
 
-    int mbPartIdx_A = -1;int subPartIdx_A = -1;int refIdxLX_A = -1;MotionVector mv_lx_A;
-    int mbPartIdx_B = -1;int subPartIdx_B = -1;int refIdxLX_B = -1;MotionVector mv_lx_B;
-    int mbPartIdx_C = -1;int subPartIdx_C = -1;int refIdxLX_C = -1;MotionVector mv_lx_C;
-    int mbPartIdx_D = -1;int subPartIdx_D = -1;int refIdxLX_D = -1;MotionVector mv_lx_D;
+    int mbPartIdx_A = -1, subPartIdx_A = -1, refIdxLX_A = -1;MotionVector mv_lx_A;
+    int mbPartIdx_B = -1, subPartIdx_B = -1, refIdxLX_B = -1;MotionVector mv_lx_B;
+    int mbPartIdx_C = -1, subPartIdx_C = -1, refIdxLX_C = -1;MotionVector mv_lx_C;
+    int mbPartIdx_D = -1, subPartIdx_D = -1, refIdxLX_D = -1;MotionVector mv_lx_D;
 
     predmode_mb_part Pred_LX = listSuffixFlag ? Pred_L1 : Pred_L0;
     int8* ref_idx_lx = listSuffixFlag == 1 ? current->inter->ref_idx_l1 : current->inter->ref_idx_l0;
-    int refIdxLX = MbPartPredMode(current->type, mbPartIdx);;
+    int refIdxLX = ref_idx_lx[mbPartIdx];
 
-    // 这个函数是用来
+    // 这个函数是用来计算这个方向上有没有预测值，以及参考索引和预测标志
     auto f_1 = [&current, listSuffixFlag, mbPartIdx, subPartIdx, Pred_LX](char direction, int& mbPartIdx_N, int& subPartIdx_N, int& refIdxLX_N, int mv_lx_N[2])
     ->macroblock*
     {
@@ -307,6 +307,9 @@ void neighbour_motionvector_data(
     uint8_t partWidth = MbPartWidth(current->type);
     uint8_t partHeight= MbPartHeight(current->type);
 
+    if(current->pos.x == 33 && current->pos.y == 7 && current->idx_slice == 2)
+        int a = 0;
+
     if(!current->is_avaiable(C) || mbPartIdx_C == -1 || subPartIdx_C == -1)
     {
         C = D;
@@ -320,6 +323,7 @@ void neighbour_motionvector_data(
     // 计算周围的运动矢量
     if(partWidth == 16 && partHeight == 8 && mbPartIdx == 0 && refIdxLX_B == refIdxLX) 
     {
+        // 当前分上下两块，第一块从 B 预测而来 P170页，以下除了else里面的情况皆是
         mv_lX[0] = mv_lx_B[0];
         mv_lX[1] = mv_lx_B[1];
     }
@@ -327,11 +331,14 @@ void neighbour_motionvector_data(
             (partWidth == 8 && partHeight == 16 && mbPartIdx == 0 && refIdxLX_A == refIdxLX)
     )
     {
+        // 当前分上下两块，第二块由 A 预测而来
+        // 当前分左右两块，第一块由 A 预测而来
         mv_lX[0] = mv_lx_A[0];
         mv_lX[1] = mv_lx_A[1];
     }
     else if(partWidth == 8 && partHeight == 16 && mbPartIdx == 1 && refIdxLX_C == refIdxLX)
     {
+        // 当前分为左右两块，第二块由 C 预测而来
         mv_lX[0] = mv_lx_C[0];
         mv_lX[1] = mv_lx_C[1];
     }

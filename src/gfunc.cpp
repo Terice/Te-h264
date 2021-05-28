@@ -2,6 +2,7 @@
 #include "gchart.h"
 #include "gtype.h"
 #include <math.h>
+#include <string.h>
 
 #include "matrix.h"
 #include "slice.h"
@@ -9,13 +10,14 @@
 #include "picture.h"
 #include "predchart.h"
 
+
 int Min(int a, int b){return a <= b ? a : b;}
 int Max(int a, int b){return a >= b ? a : b;}
 unsigned int Abs(int x){return x>0?x:(unsigned int)-x;};
 int Sig(int v){return v >= 0 ? 1 : -1;};
 int Median(int x, int y, int z){return x + y + z - Min(x, Min(y, z)) - Max(x, Max(y , z));}
 
-int MinPositive(int x, int y){return (x > 0 && y > 0) ? Min(x, y) : Max(x, y);}
+int MinPositive(int x, int y){return (x >= 0 && y >= 0) ? Min(x, y) : Max(x, y);}
 // Six tap 滤波器
 int SixTapFliter(int a, int b, int c, int d, int e, int f){return a - 5 * b + 20 * c + 20 * d - 5 * e + f;}
 // zig-zag扫描
@@ -34,12 +36,13 @@ int Clip1C(int x, int BitDepthC){return Clip3(0, (1 << BitDepthC) - 1, x);};
 static inline int MallocMotionVector(MotionVector ***mv, int MbPart, SubMacroBlock* SubPart)
 {
     *mv = new MotionVector*[MbPart];
+    
     if(SubPart) //r
         for (int i = 0; i < MbPart; i++)
-            (*mv)[i] = new MotionVector[SubPart[i].part];
+            (*mv)[i] = new MotionVector[SubPart[i].part]{0};
     else 
         for (int i = 0; i < MbPart; i++)
-            (*mv)[i] = new MotionVector[1];
+            (*mv)[i] = new MotionVector[1]{0};
     return 0;
 }
 static inline int FreeMotionVector(MotionVector ***mv, int MbPart, SubMacroBlock* SubPart)

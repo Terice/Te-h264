@@ -27,7 +27,8 @@ bool Direct_Col_Zero(\
     bool colZeroFlag; MotionVector mvCol; int refIdxCol;
 
     // 判断当前宏块是不是不动的宏块
-    if(!de->list_Ref1[0]->is_UsedForShort()) colZeroFlag = 0;
+    if(!de->list_Ref1[0]->is_UsedForShort()) 
+        colZeroFlag = 0;
     else
     {
         // 计算相邻的并置块的运动矢量和参考索引
@@ -37,7 +38,14 @@ bool Direct_Col_Zero(\
         de->list_Ref1[0], mvCol, &refIdxCol);
         
         if(refIdxCol == 0)
-            if(mvCol[0] > -1 && mvCol[0] < 1 && mvCol[1] > -1 && mvCol[1] < 1)
+        /* 在P166，对于并置块运动矢量在-1, 1 范围内是这样说明的
+            – If the co-located macroblock is a frame macroblock, the units of mvCol[ 0 ]
+            and mvCol[ 1 ] are units of quarter luma frame samples. 
+            – Otherwise (the co-located macroblock is a field macroblock), the units of 
+            mvCol[ 0 ] and mvCol[ 1 ] are units of quarter luma field samples.
+        */
+            // if(mvCol[0] >= -1 && mvCol[0] <= 1 && mvCol[1] >= -1 && mvCol[1] <= 1)
+            if(mvCol[0] & 3 && mvCol[1] & 3)
                 colZeroFlag = 1;
             else 
                 colZeroFlag = 0;
@@ -123,7 +131,7 @@ int Prediction_Inter_Direct(\
     parser* pa, decoder *de
 )
 {
-    if(current->idx_slice == 2 && current->pos.x == 4 && current->pos.y == 15)
+    if(current->idx_slice == 5 && current->pos.x == 0 && current->pos.y == 7)
         int a = 0;
     //空间预测 spatial direct luma motion vector
     // if(pa->cur_slice->ps->direct_spatial_mv_pred_flag)//空间预测

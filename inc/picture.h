@@ -37,6 +37,10 @@ public:
     picture(parser*, decoder*);
     ~picture();
 
+    int dec;
+    int poc;
+    char type;
+
     // 按照样点为单位来计算得到的pic尺寸
     area size;
 

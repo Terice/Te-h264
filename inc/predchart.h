@@ -15,7 +15,7 @@
 // 重新制作了一下info表
 // 第一条索引就是 宏块类型的枚举的值
 // 第二条索引是对应的 数值
-// 首先 I 宏块是没有分块的，但是这里为了一致保持了这条，值为16
+// 首先 I 宏块是没有分块的，但是这里为了一致保持了这条，值为1
 // 对于的分块 宽高都是0
 // 对于intra16x16, 色彩编码模式能够从type的值读出来，也不再查表了
 // 把所有的宏块类型都考虑在内了，也就不用区分slice来判断了
@@ -87,7 +87,7 @@ static const unsigned char MacroBlockChart[][6]=
 #define SUBMB_CHART_INDEX_PART_W   3
 #define SUBMB_CHART_INDEX_PART_H   4
 
-static const uint8 SubMacroBlockChart[18][6] =
+static const uint8 SubMacroBlockChart[18][5] =
 {
 /*  |sub_type          |Num |premode     |width |height|
     |                  |Sub |            |      |      |
