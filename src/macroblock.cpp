@@ -103,8 +103,6 @@ void macroblock::attach(picture* p)
 // 并且此时应该已经链接到了pic上了，周围宏块都已经计算好了
 void macroblock::decode()
 {
-    if(this->idx_slice == 7 && this->pos.x == 33 && this->pos.y == 8)
-        int a = 1;
     ParseHead();
     // std::cout << ">> ma: type:[" << mb_type << "]" << pos.x << "," << pos.y << std::endl; 
     calcqp();//
@@ -292,7 +290,7 @@ void macroblock::Parse_Sub(int* noSubMbPartSizeLessThan8x8Flag)
                     mvd_l1[mbPartIdx][subMbPartIdx][0] =  pa->read_ae(0x00043000U | ((uint32)mbPartIdx << 8) | (subMbPartIdx << 4)  | (0U << 1) | 1U);
                     mvd_l1[mbPartIdx][subMbPartIdx][1] =  pa->read_ae(0x00043000U | ((uint32)mbPartIdx << 8) | (subMbPartIdx << 4)  | (1U << 1) | 1U);
                     // }
-                    neighbour_motionvector(this, mbPartIdx, subMbPartIdx, 0, mvp_l1[mbPartIdx][subMbPartIdx]);
+                    neighbour_motionvector(this, mbPartIdx, subMbPartIdx, 1, mvp_l1[mbPartIdx][subMbPartIdx]);
                     // 读取到mvp和mvd就可以计算出来mv了
                     mv_l1[mbPartIdx][subMbPartIdx][0] = mvp_l1[mbPartIdx][subMbPartIdx][0] + mvd_l1[mbPartIdx][subMbPartIdx][0];
                     mv_l1[mbPartIdx][subMbPartIdx][1] = mvp_l1[mbPartIdx][subMbPartIdx][1] + mvd_l1[mbPartIdx][subMbPartIdx][1];
@@ -778,10 +776,10 @@ void macroblock::Decode_Inter()
         }
         
         int8     *ref_idx_l0 = inter->ref_idx_l0;
-        int8     *ref_idx_l1 = inter->ref_idx_l1;
         bool     *predFlagL0 = inter->predFlagL0;
-        bool     *predFlagL1 = inter->predFlagL1;
         MotionVector **mv_l0 = inter->mv.mv_l0;
+        int8     *ref_idx_l1 = inter->ref_idx_l1;
+        bool     *predFlagL1 = inter->predFlagL1;
         MotionVector **mv_l1 = inter->mv.mv_l1;
 
         //子块 的 循环，

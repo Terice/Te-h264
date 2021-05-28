@@ -488,10 +488,17 @@ void decoder::out_DecodedBuf()
 
 }
 
-
+extern "C"
+{
 #include <SDL/SDL.h>
+#include <SDL/SDL_ttf.h>
+}
+
 static SDL_Surface* screen;
 static SDL_Event event;
+static TTF_Font *font ;
+static char mesg_str[128];
+static SDL_Color color = { 0x2d, 0xb2, 0xbc };;
 static unsigned int \
 	rmask = 0x000000FF,\
     gmask = 0x000000FF,\
@@ -513,38 +520,47 @@ void decoder::out_DecodedPic()
     {
         // 输出图像
 
-        if(terr.pic_terminalchar())//是否输出字符画的控制
+        if(terr.pic_terminalpic())//输出最后图像的的控制
         {
             // list_Out.top()->drawpic();      //pic字符化
             picture* pic = list_Out.top();
-            // printf(">>decder: current out pic : POC:%4d\n", list_Out.top()->POC);
+            printf(">>decder: DEC[%5d] POC:[%4d] TYP:[%c]\n", pic->dec, pic->poc, pic->type);
+            // if(pic->dec >= 4)
+            //     pic->print();
 
+            sprintf(mesg_str, ">>decder: DEC[%5d] POC:[%4d] TYP:[%c]", pic->dec, pic->poc, pic->type);
+            SDL_Surface *mesg = TTF_RenderText_Solid(font, mesg_str, color);
 
             SDL_Surface *frame = SDL_CreateRGBSurfaceFrom((void*)(pic->cons->data), pic->cons->w, pic->cons->h, 1*8, 1*pic->cons->w, rmask, gmask, bmask, amask);
             SDL_BlitSurface(frame, NULL, screen, NULL );
+            SDL_BlitSurface(mesg, NULL, screen, NULL );
             SDL_FreeSurface(frame);
             SDL_Flip(screen);
 
-            int next = 1;
-            while(next)
+
+            bool quit = false;
+            while( quit == false )
             {
-                
-                SDL_WaitEvent(&event);
-                switch (event.type)
+                if(SDL_PollEvent(&event))
                 {
-                case SDL_QUIT:
+                    switch (event.type)
                     {
-                        SDL_Quit();
-                        exit(0);
+                    case SDL_QUIT:
+                        {
+                            SDL_Quit();
+                            exit(0);
+                        }
+                        break;
+                    case SDL_KEYDOWN:
+                        break;
+                    default:
+                        quit = true;
+                        // printf("SDL: event : %2d\n", event.type);
+                        break;
                     }
-                    break;
-                case SDL_KEYDOWN:
-                    next = 0;
-                    break;
-                default:
-                    // printf("SDL: event : %2d\n", event.type);
-                    break;
                 }
+                else
+                    quit = true;
             }
         }
         // 输出完毕
@@ -559,7 +575,10 @@ decoder::decoder()
 
     SDL_Init( SDL_INIT_EVERYTHING );
     screen = SDL_SetVideoMode( 864, 480, 32, SDL_SWSURFACE );
-    
+    TTF_Init();
+    font = TTF_OpenFont("/usr/share/fonts/noto/NotoSansMono-Regular.ttf", 28);
+
+
     count_Out = 0;
     curPIC = NULL;
     curSLI = NULL;

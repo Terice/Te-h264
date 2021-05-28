@@ -31,7 +31,7 @@ typedef struct DebugControl__
     char conspic_result_Cb              ;
     char conspic_result_Cr              ;
     char inter_movevector               ;
-    char pic_terminalchar               ;
+    char pic_terminalpic                ;
     char timer                          ;
     char nal_info                       ;
     char control_all                    ;
@@ -71,7 +71,7 @@ public:
     DE_FUNC(conspic_result_Cb     );
     DE_FUNC(conspic_result_Cr     );
     DE_FUNC(inter_movevector      );
-    DE_FUNC(pic_terminalchar      );
+    DE_FUNC(pic_terminalpic       );
     DE_FUNC(timer                 );
     DE_FUNC(nal_info              );
     DE_FUNC(control_all           );
