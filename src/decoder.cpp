@@ -522,11 +522,9 @@ void decoder::out_DecodedPic()
 
         if(terr.pic_terminalpic())//输出最后图像的的控制
         {
-            // list_Out.top()->drawpic();      //pic字符化
+
             picture* pic = list_Out.top();
             printf(">>decder: DEC[%5d] POC:[%4d] TYP:[%c]\n", pic->dec, pic->poc, pic->type);
-            // if(pic->dec >= 4)
-            //     pic->print();
 
             sprintf(mesg_str, ">>decder: DEC[%5d] POC:[%4d] TYP:[%c]", pic->dec, pic->poc, pic->type);
             SDL_Surface *mesg = TTF_RenderText_Solid(font, mesg_str, color);
@@ -537,12 +535,12 @@ void decoder::out_DecodedPic()
             SDL_FreeSurface(frame);
             SDL_Flip(screen);
 
-
             bool quit = false;
             while( quit == false )
             {
-                if(SDL_PollEvent(&event))
-                {
+                SDL_WaitEvent(&event);
+//                 if(SDL_PollEvent(&event))
+//                 {
                     switch (event.type)
                     {
                     case SDL_QUIT:
@@ -552,15 +550,27 @@ void decoder::out_DecodedPic()
                         }
                         break;
                     case SDL_KEYDOWN:
+                        {
+                            SDLKey k = event.key.keysym.sym;
+                            if(k == SDLK_p)
+                            {
+                                pic->print();
+                                fprintf(stderr, ">> decoder.cpp : write info into file\n");
+                            }
+                            else if(k == SDLK_n)
+                            {
+                                quit = true;
+                            }
+                            else
+                            {
+                            }
+                        }
                         break;
                     default:
-                        quit = true;
                         // printf("SDL: event : %2d\n", event.type);
                         break;
                     }
-                }
-                else
-                    quit = true;
+//                 }
             }
         }
         // 输出完毕

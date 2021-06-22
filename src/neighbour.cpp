@@ -54,7 +54,7 @@ macroblock * trans_macroblock(macroblock * current, char direction)
     case 'D': return current->neighbour.D.avaiable ? current->neighbour.D.pointer : NULL; break;
     case 'N': return current; break;
     case  0 : return NULL; break;
-    default: break;
+    default: return NULL;break;
     }
 }
 
@@ -175,7 +175,7 @@ void col_located_4x4_sub_Partions(\
         // 先简单设置为 0 0 0 
         mvCol[0] = colMb->inter->mv.mv_l0[0][0][0];
         mvCol[1] = colMb->inter->mv.mv_l0[0][0][1];
-        *refIdxCol = 0;
+        *refIdxCol = colMb->inter->ref_idx_l0[0];
     }
 }
 

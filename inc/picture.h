@@ -62,6 +62,7 @@ public:
     // 根据 nal_ref_idc 来完成相应的动作
     void refidc(int nal_ref_idc);
 
+    /// 用来完成一张pic的信息输出
     void print();
 
     void drawpic();

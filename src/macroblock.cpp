@@ -335,7 +335,7 @@ void macroblock::Parse_Intra()
         i->index = 0; // 初始化第一个要解码的块为0
         uint8 *rem_intra4x4_pred_mode       = i->rem_intra4x4_pred_mode;
         uint8 *prev_intra4x4_pred_mode_flag = i->prev_intra4x4_pred_mode_flag;
-        for(int8 luma4x4BlkIdx=0; luma4x4BlkIdx<16; luma4x4BlkIdx++) 
+        for(int luma4x4BlkIdx=0; luma4x4BlkIdx<16; luma4x4BlkIdx++)
         { 
             prev_intra4x4_pred_mode_flag[luma4x4BlkIdx] = pa->read_ae(0x00031000U);
             if(!prev_intra4x4_pred_mode_flag[luma4x4BlkIdx]) 
@@ -350,7 +350,7 @@ void macroblock::Parse_Intra()
 
         uint8* prev_intra8x8_pred_mode_flag = i->prev_intra8x8_pred_mode_flag;
         uint8* rem_intra8x8_pred_mode       = i->rem_intra8x8_pred_mode;
-        for(int8 luma8x8BlkIdx=0; luma8x8BlkIdx < 4; luma8x8BlkIdx++)
+        for(int luma8x8BlkIdx=0; luma8x8BlkIdx < 4; luma8x8BlkIdx++)
         { 
             prev_intra8x8_pred_mode_flag[luma8x8BlkIdx];
             if(!prev_intra8x8_pred_mode_flag[luma8x8BlkIdx]){
@@ -367,6 +367,11 @@ void macroblock::Parse_Skip()
 {
     inter = new Inter_pred;
     memset(inter, 0, sizeof(Inter_pred));
+
+    if(this->pic->dec == terr.po.dec_i && this->pos.x == terr.po.pos_x && this->pos.y == terr.po.pos_y)
+    {
+        int debugpoint = 0;
+    }
 
     mb_type = 0;// 都推测为 0 type值为Skip
     type    = sl->type == P ? P_Skip : B_Skip;

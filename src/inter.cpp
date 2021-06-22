@@ -44,11 +44,11 @@ bool Direct_Col_Zero(\
             – Otherwise (the co-located macroblock is a field macroblock), the units of 
             mvCol[ 0 ] and mvCol[ 1 ] are units of quarter luma field samples.
         */
-            // if(mvCol[0] >= -1 && mvCol[0] <= 1 && mvCol[1] >= -1 && mvCol[1] <= 1)
-            if(mvCol[0] & 3 && mvCol[1] & 3)
-                colZeroFlag = 1;
-            else 
+//             if(mvCol[0] >= -3 && mvCol[0] <= 3 && mvCol[1] >= -3 && mvCol[1] <= 3)
+            if(mvCol[0] & 0xfffffffc || mvCol[1] & 0xfffffffc)
                 colZeroFlag = 0;
+            else 
+                colZeroFlag = 1;
         else
             colZeroFlag = 0;
     }
@@ -455,6 +455,7 @@ int Prediction_Inter_LumaSampleInterpolation(\
             return r_q = two_tap_filter(s_h, m_h);
         }
     }
+    return 0;
 }
 void Prediction_Inter(\
     macroblock* current, matrix& out, \

@@ -18,14 +18,14 @@ void sei::decode()
     int payloadSize = 0;
     unsigned char ch;
 
-    while(ch = pa->read_ch() == 0xFFU)
+    while((ch = pa->read_ch()) == 0xFFU)
     {
         payloadType += 255;
     }
     last_payload_type_byte = ch;
     payloadType += last_payload_type_byte;
     
-    while(ch = pa->read_ch() == 0xFFU)
+    while((ch = pa->read_ch()) == 0xFFU)
     {
         payloadSize += 255;
     }

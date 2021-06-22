@@ -77,6 +77,11 @@ DE_TIMER                         = 0
 DE_NAL_INFO                      = 0
 
 DE_CONTROL_ALL                   = 1
+
+ED_PAUS_DEC_I                    = 9
+DE_PAUS_POS_X                    = 30
+DE_PAUS_POS_Y                    = 0
+
 if(DE_CONTROL_ALL == 0) then
     print(">>conf:")
     print("         DE_CABAC_STATE          :"..DE_CABAC_STATE          ) 
@@ -153,4 +158,8 @@ DE_INTER_MOVEVECTOR,
 DE_PIC_TERMINATECHAR,
 DE_TIMER,
 DE_NAL_INFO,
-DE_CONTROL_ALL
+DE_CONTROL_ALL,
+
+ED_PAUS_DEC_I,
+DE_PAUS_POS_X,
+DE_PAUS_POS_Y
