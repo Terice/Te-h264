@@ -36,10 +36,11 @@ void neighbour_motionver_normal();
 void neighbour_motionver_bskip ();
 void neighbour_motionver_pskip ();
 
+/// 计算并置的 sub-macroblock
 void col_located_4x4_sub_Partions(\
     macroblock *current, int mbPartIdx, int subPartIdx,\
-    bool direct_8x8_inference_flag, picture *colPic,\
-    MotionVector mvCol, int *refIdxCol
+    bool direct_8x8_inference_flag, decoder *de,\
+    picture **picCol, macroblock **mbCol, MotionVector mvCol, int *refIdxCol \
 );
 
 /**

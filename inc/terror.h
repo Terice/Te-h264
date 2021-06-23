@@ -2,6 +2,7 @@
 #define TERROR_H__
 
 #include <string>
+
 #define DE_FUNC(name)\
 bool name()\
 {\
@@ -36,6 +37,13 @@ typedef struct DebugControl__
     char nal_info                       ;
     char control_all                    ;
 }DebugControl;
+typedef struct PausePoint__
+{
+    char dec_i;
+    char pos_x;
+    char pos_y;
+}PausePoint;
+
 
 class terror
 {
@@ -44,6 +52,9 @@ private:
     std::string msg;
     void tconf(std::string conf);
 public:
+
+    PausePoint po;
+
     DebugControl de;
     // 退出程序
     void texit(int);

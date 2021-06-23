@@ -4,7 +4,7 @@
 #include "gfunc.h"
 #include "gmbinfo.h"
 #include "neighbour.h"
-
+#include "decoder.h"
 
 
 // 换成目标宏块内的坐标
@@ -54,7 +54,7 @@ macroblock * trans_macroblock(macroblock * current, char direction)
     case 'D': return current->neighbour.D.avaiable ? current->neighbour.D.pointer : NULL; break;
     case 'N': return current; break;
     case  0 : return NULL; break;
-    default: break;
+    default: return NULL;break;
     }
 }
 
@@ -155,16 +155,18 @@ void neighbour_macroblock(macroblock *current, char direction, macroblock **resu
 // 计算并置的4x4子块
 void col_located_4x4_sub_Partions(\
     macroblock *current, int mbPartIdx, int subPartIdx,\
-    bool direct_8x8_inference_flag, picture *colPic,\
-    MotionVector mvCol, int *refIdxCol
+    bool direct_8x8_inference_flag, decoder *de, \
+    picture **picCol, macroblock **mbCol, MotionVector mvCol, int *refIdxCol \
 )
 {
     int x, y;
-    macroblock *colMb;
+    macroblock *m;
+    picture *p = de->list_Ref1[0];
     x = current->pos.x; y = current->pos.y;
-    colMb = (*colPic->mb)[y][x];
+    m = (*p->mb)[y][x];
+
     
-    if(colMb->is_intrapred())
+    if(m->is_intrapred())
     {
         mvCol[0] = 0;
         mvCol[1] = 0;
@@ -173,10 +175,12 @@ void col_located_4x4_sub_Partions(\
     else
     {
         // 先简单设置为 0 0 0 
-        mvCol[0] = colMb->inter->mv.mv_l0[0][0][0];
-        mvCol[1] = colMb->inter->mv.mv_l0[0][0][1];
-        *refIdxCol = 0;
+        mvCol[0] = m->inter->mv.mv_l0[0][0][0];
+        mvCol[1] = m->inter->mv.mv_l0[0][0][1];
+        *refIdxCol = m->inter->ref_idx_l0[0];
     }
+    *picCol = p;
+    *mbCol  = m;
 }
 
 

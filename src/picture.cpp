@@ -58,6 +58,10 @@ picture::~picture()
 
 void picture::deocde()
 {
+
+    dec = count_pic++;
+
+
     sl = new slice(pa, de, this);
     // 设置解析器当前的slice
     // 由于简化了，所以这里就只有一个slice
@@ -85,7 +89,6 @@ void picture::deocde()
     else type = 'B'; 
 
     poc = POC;
-    dec = count_pic++;
     drawpic();
 }
 
@@ -188,11 +191,14 @@ void picture::refidc(int nal_ref_idc)
 }
 void picture::print()
 {
+    // 文件写入到当前目录的
+    FILE *fp = fopen("picinfo.txt", "w");
     // 宏块是否齐全的输出
-    
+
     // NULL 会用 ～ 标识
     // 非空宏块指针会用其 type 的调试值标识
-    printf(">>pic  :\n");
+    fprintf(fp, "DEC[%5d] POC:[%4d] TYP:[%c]\n", this->dec, this->poc, this->type);
+
     /*
     行号       列号
     28---------4 ---------8 ------
@@ -203,24 +209,24 @@ void picture::print()
     {
         if(i%4 == 0) 
         {
-            printf(" %-2lu", i/4 * 4);
+            fprintf(fp, " %-2lu", i/4 * 4);
             int width = this->mb->w/4+1;
-            for (size_t j = 1; j < width; j++)
+            for (int j = 1; j < width; j++)
             {
-                printf("---------%-2d", j*4);
+                fprintf(fp, "---------%-2d", j*4);
             }
-            printf("\n");
+            fprintf(fp, "\n");
         }
-        for (size_t j = 0; j < this->mb->w; j++)
+        for (int j = 0; j < this->mb->w; j++)
         {
-            if(j%4 == 0) printf(" | ");
+            if(j%4 == 0) fprintf(fp, " | ");
 
             if(this->mb[0][i][j] != NULL) 
-                printf("%2d", mb[0][i][j]->mb_type);
+                fprintf(fp, "%2d", mb[0][i][j]->mb_type);
             else 
-                printf("~~");
+                fprintf(fp, "~~");
         }
-        printf(" |\n");
+        fprintf(fp, " |\n");
     }
     // 函数稍加改变就可以用来输出每个运动矢量
     /*
@@ -230,29 +236,29 @@ void picture::print()
     |  0 1 1 2 |  2 0 2 2 |  1 2 2  每个数据两格(%-2d)
     |  0 0 0 2 |  5 1 5 2 |  7 0 2 
     */
-    for (size_t i = 0; i < this->mb->h; i++)
+    for (int i = 0; i < this->mb->h; i++)
     {
 
         if(i%4 == 0) 
         {
-            printf(" %-2lu", i/4 * 4);
+            fprintf(fp, " %-2d", i/4 * 4);
             int width = this->mb->w/4+1;
-            for (size_t j = 1; j < width; j++)
+            for (int j = 1; j < width; j++)
             {
-                printf("---------------------------------------------------------%-2d", j*4);
+                fprintf(fp, "---------------------------------------------------------%-2d", j*4);
             }
-            printf("\n");
+            fprintf(fp, "\n");
         }
-        for (size_t j = 0; j < this->mb->w; j++)
+        for (int j = 0; j < this->mb->w; j++)
         {
-            if(j%4 == 0) printf(" | ");
+            if(j%4 == 0) fprintf(fp, " | ");
 
             if(this->mb[0][i][j] != NULL && mb[0][i][j]->is_interpred()) 
-                printf("(%5d, %5d)", mb[0][i][j]->inter->mv.mv_l1[0][0][0],mb[0][i][j]->inter->mv.mv_l1[0][0][1]);
+                fprintf(fp, "(%5d, %5d)", mb[0][i][j]->inter->mv.mv_l1[0][0][0],mb[0][i][j]->inter->mv.mv_l1[0][0][1]);
             else 
-                printf("..............");
+                fprintf(fp, "..............");
         }
-        printf(" |\n");
+        fprintf(fp, " |\n");
     }
 
 
@@ -260,9 +266,10 @@ void picture::print()
     // printf("--IDX:[%4d] POC:[%4d]\n", count_pic++, POC);
     if(count_mb < mb->w * mb->h)
     {
-        printf(">>pic  : [%4d]/[%4d]", mb->w * mb->h, count_mb);
+        fprintf(fp, ">>pic  : [%4d]/[%4d]", mb->w * mb->h, count_mb);
         terr.texit(-1);
     }
+    fclose(fp);
 }
 
 // 用于将 像素值 转换为字符的转换表

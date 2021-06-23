@@ -386,10 +386,11 @@ void slice::ParseSliceData()
         
         // 宏块坐标的统计必须由slice来完成
         // 而不是由picture来完成，
-        // 因为图片无法知道下一个宏块的坐标是什么，只有slice能推导出回来
+        // 因为图片无法知道下一个宏块的坐标是什么，只有slice能推导出来
         mb->pos.x = x_cur;
         mb->pos.y = y_cur;
         if(++x_cur >= width_mb) {x_cur = 0; ++y_cur;}
+
 
         mb->idx_inpicture = index_MbInPicture++;//index_MbInPicture这个变量不应该设置在slice里面，现在还没有改过来
     
