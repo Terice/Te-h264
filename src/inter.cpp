@@ -17,6 +17,89 @@
 // 平均值
 #define two_tap_filter(a,b) ((a + b + 1) >> 1)
 
+int MapColToList0(int refIdxCol)
+{
+    int  vertMvScale;
+    int  field_pic_flag;
+    return 0;
+}
+int DiffPicOrderCnt(picture *p1, picture *p2)
+{
+    return (int)Abs(p1->POC - p2->POC);
+}
+
+/// 时间上的Direct预测
+void Prediction_Inter_Direct_Temporal(\
+    macroblock* current,\
+    int mbPartIdx,\
+    parser* pa, decoder *de
+)
+{
+    // 用于计算并置块的变量
+    picture *picCol; macroblock *mbCol; MotionVector mvCol; int refIdxCol;
+
+    picture *currPicOrField, *pic0, *pic1;
+
+    int8* ref_idx_l0     = current->inter->ref_idx_l0;
+    int8* ref_idx_l1     = current->inter->ref_idx_l1;
+    MotionVector **mv_l0 = current->inter->mv.mv_l0  ;
+    MotionVector **mv_l1 = current->inter->mv.mv_l1  ;
+    bool* predFlagL0     = current->inter->predFlagL0;
+    bool* predFlagL1     = current->inter->predFlagL1;
+
+    int refIdxL0, refIdxL1;
+
+    int tx,td,tb;
+    int  DistScaleFactor;
+
+
+    for (int subPartIdx = 0; subPartIdx < 4; subPartIdx++)
+    {
+        // 计算相邻的并置块的运动矢量和参考索引
+        col_located_4x4_sub_Partions(\
+            current, mbPartIdx, subPartIdx, \
+            pa->pS->sps->direct_8x8_inference_flag, de, \
+            &picCol, &mbCol, mvCol, &refIdxCol \
+        );
+
+        refIdxL0 = ((refIdxCol < 0) ? 0 : MapColToList0(refIdxCol));
+        refIdxL1 = 0;
+
+        ref_idx_l0[mbPartIdx] = refIdxL0;
+        ref_idx_l1[mbPartIdx] = refIdxL1;
+
+        // p167
+        // Depending on the value of vertMvScale the vertical component of mvCol is modified as follows:
+        // ...
+
+        currPicOrField = current->pic;
+        pic0 = de->list_Ref0[refIdxL0];
+        pic1 = de->list_Ref1[refIdxL1];
+
+        if( (pic0 && pic0->is_UsedForLong()) || DiffPicOrderCnt(pic1, pic0) == 0)
+        {
+            mv_l0[mbPartIdx][subPartIdx][0] = mvCol[0];
+            mv_l0[mbPartIdx][subPartIdx][1] = mvCol[1];
+            mv_l1[mbPartIdx][subPartIdx][0] = 0;
+            mv_l1[mbPartIdx][subPartIdx][1] = 0;
+        }
+        else
+        {
+            tb = Clip3( -128, 127, DiffPicOrderCnt(currPicOrField, pic0));
+            td = Clip3( -128, 127, DiffPicOrderCnt(pic1, pic0));
+            tx = (16384 + Abs(td / 2)) / td;
+            DistScaleFactor = Clip3( -1024, 1023, ( tb * tx + 32 ) >> 6);
+            mv_l0[mbPartIdx][subPartIdx][0] = ( DistScaleFactor * mvCol[0] + 128 ) >> 8;
+            mv_l0[mbPartIdx][subPartIdx][1] = ( DistScaleFactor * mvCol[1] + 128 ) >> 8;
+            mv_l1[mbPartIdx][subPartIdx][0] = mv_l0[mbPartIdx][subPartIdx][0] - mvCol[0];
+            mv_l1[mbPartIdx][subPartIdx][1] = mv_l0[mbPartIdx][subPartIdx][1] - mvCol[1];
+        }
+    }
+    predFlagL0[mbPartIdx] = ref_idx_l0[mbPartIdx] >= 0 ? 1 : 0;
+    predFlagL1[mbPartIdx] = ref_idx_l1[mbPartIdx] >= 0 ? 1 : 0;
+}
+
+
 // 计算当前方向是不是不动的方向
 bool Direct_Col_Zero(\
     macroblock* current,\
@@ -25,18 +108,19 @@ bool Direct_Col_Zero(\
 )
 {
     bool colZeroFlag; MotionVector mvCol; int refIdxCol;
+    picture *picCol; macroblock *mbCol;
 
+    // 计算相邻的并置块的运动矢量和参考索引
+    col_located_4x4_sub_Partions(\
+        current, mbPartIdx, subPartIdx, \
+        pa->pS->sps->direct_8x8_inference_flag, de, \
+        &picCol, &mbCol, mvCol, &refIdxCol \
+    );
     // 判断当前宏块是不是不动的宏块
-    if(!de->list_Ref1[0]->is_UsedForShort()) 
+    if(!picCol->is_UsedForShort())
         colZeroFlag = 0;
     else
     {
-        // 计算相邻的并置块的运动矢量和参考索引
-        col_located_4x4_sub_Partions(\
-        current, mbPartIdx, subPartIdx, \
-        pa->pS->sps->direct_8x8_inference_flag,\
-        de->list_Ref1[0], mvCol, &refIdxCol);
-        
         if(refIdxCol == 0)
         /* 在P166，对于并置块运动矢量在-1, 1 范围内是这样说明的
             – If the co-located macroblock is a frame macroblock, the units of mvCol[ 0 ]
@@ -44,17 +128,22 @@ bool Direct_Col_Zero(\
             – Otherwise (the co-located macroblock is a field macroblock), the units of 
             mvCol[ 0 ] and mvCol[ 1 ] are units of quarter luma field samples.
         */
-//             if(mvCol[0] >= -3 && mvCol[0] <= 3 && mvCol[1] >= -3 && mvCol[1] <= 3)
+
+            //------------------------------
+            // -1 到 1，单位是1/4像素，也就是去掉最后的两个二进制位
+            // 但是负数是这么算的的么？？
+            // 计算分数像素的时候就是直接 mv & 3 这样算的，也没分负数啊
+            // if(mvCol[0] >= -3 && mvCol[0] <= 3 && mvCol[1] >= -3 && mvCol[1] <= 3)
             if(mvCol[0] & 0xfffffffc || mvCol[1] & 0xfffffffc)
-                colZeroFlag = 0;
+                colZeroFlag = 0; //这一块人给整麻了
             else 
                 colZeroFlag = 1;
+            //------------------------------
         else
             colZeroFlag = 0;
     }
     return colZeroFlag;
 }
-
 
 // 空间上 Direct 预测
 // 表示宏块的信息可由相邻空间上的宏块的信息推导出来
@@ -131,24 +220,16 @@ int Prediction_Inter_Direct(\
     parser* pa, decoder *de
 )
 {
-    if(current->idx_slice == 5 && current->pos.x == 0 && current->pos.y == 7)
-        int a = 0;
     //空间预测 spatial direct luma motion vector
-    // if(pa->cur_slice->ps->direct_spatial_mv_pred_flag)//空间预测
-    // {
-        // MotionVector **mv0 = current->inter->mv.mv_l0;
-        // MotionVector **mv1 = current->inter->mv.mv_l1;
-        // for (int subMbPartIdx = 0; subMbPartIdx < 4; subMbPartIdx++)
-        // {
-            Prediction_Inter_Direct_Spatial(current, mbPartIdx, pa, de);
-            // printf("direct [%2d, %2d]: part: %d, sub: %d, mov0: [%2d,%2d], mov1: [%2d,%2d]\n",current->pos.x, current->pos.y, mbPartIdx, subMbPartIdx, mv0[mbPartIdx][subMbPartIdx][0],mv0[mbPartIdx][subMbPartIdx][1],mv1[mbPartIdx][subMbPartIdx][0],mv1[mbPartIdx][subMbPartIdx][1]);
-        // }
-    // }
-    // else//时间预测 
-    // {
-    // }
+    if(pa->cur_slice->ps->direct_spatial_mv_pred_flag)//空间预测
+    {
+        Prediction_Inter_Direct_Spatial(current, mbPartIdx, pa, de);
 
-
+    }
+    else//时间预测
+    {
+        Prediction_Inter_Direct_Temporal(current, mbPartIdx, pa, de);
+    }
     //
     //对于 B_Direct_8x8 这里解码完毕
     //对于 B_Direct_16x16 B_Skip 这个函数需要分别执行4次
