@@ -67,7 +67,6 @@ bool decoder::clear_DecodedPic()
     
     return true;
 };
-
 //这个函数用来控制内存，在每次开始解码下一个帧的时候都把之前无用的帧删掉，
 //标记在之前完成，
 bool decoder::ctrl_Memory()
@@ -567,6 +566,7 @@ void decoder::out_DecodedPic()
                         }
                         break;
                     default:
+                        quit = true;
                         // printf("SDL: event : %2d\n", event.type);
                         break;
                     }

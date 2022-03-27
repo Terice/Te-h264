@@ -1,7 +1,7 @@
 
 CC=g++
 CFLAGS+=-g -std=c++11 
-LDFLAGS+= -llua5.1 -lSDL -lSDL_ttf #`pkg-config --cflags --libs opencv4`
+LDFLAGS+= -llua5.1 -lSDL -lSDL_ttf
 
 BIN=./
 OBJ=./obj

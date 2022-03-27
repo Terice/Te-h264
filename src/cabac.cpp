@@ -22,6 +22,7 @@
 
 #include "neighbour.h"
 
+// 调试用
 static int cabac_stop[4] = {76, 1, 36, 490};
 
 int cabac::cread_ae(uint32 syntax)
@@ -975,7 +976,7 @@ int8 cabac::read_mb_qp_delta()
         // decode_unary 解一次之后还会换上下文 ： ctxIdx + offset
         result += decode_unary(ctxIdx, 1);
         sig = result & 0x1 ? 1 : -1; // 看result是不是 2 的倍数，来确定符号 (-1)^(k+1)
-        result = sig * (result + 1 >> 1);// +1 >> 1  ceil(result/2)
+        result = sig * ((result + 1) >> 1);// +1 >> 1  ceil(result/2)
     }
     lifeTimeSlice->last_mb_qp_delta = result;
     return result;
@@ -1683,6 +1684,7 @@ bool cabac::slice_new(picture* p, slice *sl)
     set_slice(sl);
     set_pic(p);
 
+    return true;
 }
 bool cabac::slice_end()
 {

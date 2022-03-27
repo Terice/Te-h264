@@ -44,6 +44,9 @@ bool parser::update_ps(SPS* s)
     this->pV->PicSizeInMapUnits   = this->pV->PicWidthInMbs * this->pV->PicHeightInMapUnits;
     this->pV->SubWidthC           = (s->chroma_format_idc == 1 || s->chroma_format_idc == 2) ? 2 : 1;
     this->pV->SubHeightC          = (s->chroma_format_idc == 1) ? 2 : 1;
+
+
+    return true;
 }
 // 刷新图像参数集
 bool parser::update_ps(PPS* p)
@@ -51,6 +54,8 @@ bool parser::update_ps(PPS* p)
     if(pS->pps) 
         delete pS->pps;
     pS->pps = p;
+
+    return true;
 }
 void parser::set_cabac_slice_new(picture* pic, slice *sl){cabac_core->slice_new(pic,sl);}
 void parser::set_cabac_slice_end(){cabac_core->slice_end();}
@@ -99,8 +104,7 @@ bool   parser::find_nextNAL()
             case 2:\
                 if(tmp == 1) state = 3;\
                 else if(tmp == 0) state = 2;\
-                else state = 0;\
-            break;
+                else state = 0; break;
             default:state = 0;break;
         }
     }
